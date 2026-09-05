@@ -6,7 +6,7 @@
   <meta name="description" content="Web404 by EncrScripter — defensive cybersecurity intelligence toolkit." />
   <title>Web404 — by EncrScripter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css" />
 </head>
@@ -22,42 +22,45 @@
       <button class="nav" data-view="hash"><span>#</span> Hash Toolkit</button>
       <button class="nav" data-view="username"><span>@</span> Username OSINT</button>
       <button class="nav" data-view="headers"><span>↯</span> Header Scanner</button>
+      <button class="nav" data-view="findings"><span>▣</span> Findings</button>
       <button class="nav" data-view="ai"><span>✦</span> AI Assistant</button>
     </nav>
-    <div class="sidebar-foot"><div class="status-dot"></div><span>Local engine online</span><kbd>v1.0</kbd></div>
+    <div class="sidebar-foot"><div class="status-dot"></div><span>Local engine online</span><kbd>v1.7</kbd></div>
   </aside>
-
   <main>
     <header class="topbar"><div class="crumb">SECURITY CONSOLE <span>/</span> <b id="pageName">Dashboard</b></div><div class="top-actions"><button class="icon-btn" title="Notifications">◌</button><button class="profile">E<span>404</span></button></div></header>
-
     <section id="dashboard" class="view active-view">
       <div class="hero"><div><div class="eyebrow">DEFENSIVE INTELLIGENCE PLATFORM</div><h1>Know your surface.<br><em>Secure what matters.</em></h1><p>One focused workspace for reconnaissance, validation and security hygiene — built for ethical, authorized use.</p></div><div class="hero-orbit"><div class="orbit o1"></div><div class="orbit o2"></div><div class="core">W4</div></div></div>
+      <div class="section-head"><div><h2>Security Overview</h2><p>Live status from this browser session.</p></div><span class="tag" id="dashboardStatus">SESSION</span></div>
+      <div class="overview-grid">
+        <div class="overview-card"><small>SECURITY SCORE</small><strong id="securityScore">—</strong><span id="securityScoreLabel">Run an assessment to calculate</span></div>
+        <div class="overview-card"><small>FINDINGS</small><strong id="findingCount">0</strong><span>Recorded in this session</span></div>
+        <div class="overview-card"><small>MODULES</small><strong>8</strong><span>Defensive capabilities</span></div>
+        <div class="overview-card"><small>AI STATUS</small><strong id="aiStatus">—</strong><span>Server-side Gemini</span></div>
+      </div>
       <div class="section-head"><div><h2>Toolkit</h2><p>Pick a module to start an investigation.</p></div><span class="tag">8 MODULES</span></div>
       <div class="tool-grid">
         <article class="tool-card" data-open="ip"><span class="tool-icon blue">◉</span><div><h3>IP Intelligence</h3><p>Inspect public IP context and network metadata.</p></div><span class="arrow">↗</span></article>
-        <article class="tool-card" data-open="domain"><span class="tool-icon violet">⌁</span><div><h3>Domain & DNS</h3><p>Resolve A, AAAA, MX, NS and TXT records.</p></div><span class="arrow">↗</span></article>
-        <article class="tool-card" data-open="email"><span class="tool-icon orange">✉</span><div><h3>Email Breach</h3><p>Check breach exposure with privacy-safe integrations.</p></div><span class="arrow">↗</span></article>
+        <article class="tool-card" data-open="domain"><span class="tool-icon violet">⌁</span><div><h3>Domain Intelligence</h3><p>DNS records, DNSSEC status and passive certificate names.</p></div><span class="arrow">↗</span></article>
+        <article class="tool-card" data-open="email"><span class="tool-icon orange">✉</span><div><h3>Email Breach</h3><p>Check public breach exposure through a server-side provider.</p></div><span class="arrow">↗</span></article>
         <article class="tool-card" data-open="hash"><span class="tool-icon green">#</span><div><h3>Hash Toolkit</h3><p>Generate common cryptographic hashes locally.</p></div><span class="arrow">↗</span></article>
         <article class="tool-card" data-open="username"><span class="tool-icon pink">@</span><div><h3>Username OSINT</h3><p>Build an authorized username investigation checklist.</p></div><span class="arrow">↗</span></article>
         <article class="tool-card" data-open="headers"><span class="tool-icon cyan">↯</span><div><h3>Header Scanner</h3><p>Audit common web security response headers.</p></div><span class="arrow">↗</span></article>
+        <article class="tool-card" data-open="findings"><span class="tool-icon violet">▣</span><div><h3>Investigation Findings</h3><p>Capture evidence, severity, confidence and remediation.</p></div><span class="arrow">↗</span></article>
         <article class="tool-card wide" data-open="ai"><span class="tool-icon white">✦</span><div><h3>AI Cyber Assistant</h3><p>Explain findings, prioritize risk and suggest defensive next steps.</p></div><span class="arrow">↗</span></article>
       </div>
     </section>
-
-    <section id="ip" class="view"><div class="page-title"><div class="eyebrow">MODULE 01</div><h1>IP Intelligence</h1><p>Start with your own address or an IP you are authorized to investigate.</p></div><div class="panel"><div class="search-row"><input id="ipInput" placeholder="e.g. 8.8.8.8" /><button onclick="lookupIP()">Inspect IP <span>→</span></button></div><div id="ipResult" class="result empty">Enter an IP to open the inspection panel.</div></div></section>
-
-    <section id="domain" class="view"><div class="page-title"><div class="eyebrow">MODULE 02</div><h1>Domain & DNS</h1><p>Resolve public DNS records from the local server.</p></div><div class="panel"><div class="search-row"><input id="domainInput" placeholder="example.com" /><button onclick="lookupDNS()">Resolve DNS <span>→</span></button></div><div id="dnsResult" class="result empty">A, AAAA, MX, NS and TXT records will appear here.</div></div></section>
-
-    <section id="email" class="view"><div class="page-title"><div class="eyebrow">MODULE 03</div><h1>Email Breach</h1><p>Privacy-first workflow. No breach database is queried by this demo.</p></div><div class="panel"><div class="search-row"><input id="emailInput" type="email" placeholder="you@example.com" /><button onclick="checkEmail()">Check exposure <span>→</span></button></div><div id="emailResult" class="result empty">For production, connect an approved breach-intelligence provider server-side. Never expose API keys in the browser.</div></div></section>
-
-    <section id="hash" class="view"><div class="page-title"><div class="eyebrow">MODULE 04</div><h1>Hash Toolkit</h1><p>Hash input locally through the Web404 backend. Nothing is stored.</p></div><div class="panel"><textarea id="hashInput" rows="5" placeholder="Enter text to hash…"></textarea><button class="full-btn" onclick="makeHash()">Generate hashes <span>→</span></button><div id="hashResult" class="hash-list"></div></div></section>
-
-    <section id="username" class="view"><div class="page-title"><div class="eyebrow">MODULE 05</div><h1>Username OSINT</h1><p>Use this as a structured, consent-based research workspace.</p></div><div class="panel"><div class="search-row"><input id="userInput" placeholder="username" /><button onclick="usernameScan()">Build search map <span>→</span></button></div><div id="userResult" class="result empty">Enter a username to generate public-platform search links.</div></div></section>
-
-    <section id="headers" class="view"><div class="page-title"><div class="eyebrow">MODULE 06</div><h1>Header Scanner</h1><p>Check common HTTP security headers on a site you control or are authorized to assess.</p></div><div class="panel"><div class="search-row"><input id="urlInput" placeholder="https://example.com" /><button onclick="scanHeaders()">Scan headers <span>→</span></button></div><div id="headerResult" class="result empty">Security header coverage will be calculated here.</div></div></section>
-
-    <section id="ai" class="view"><div class="page-title"><div class="eyebrow">MODULE 07</div><h1>AI Cyber Assistant</h1><p>A guided analyst-style chat surface for defensive questions.</p></div><div class="chat panel"><div id="chatLog" class="chat-log"><div class="bubble bot"><b>Web404 AI</b><br>Tell me what you're investigating. I can explain DNS, headers, hashes, common security concepts and help prioritize defensive findings.</div></div><div class="chat-input"><input id="chatInput" placeholder="Ask a security question…" onkeydown="if(event.key==='Enter')askAI()"/><button onclick="askAI()">Send</button></div></div></section>
+    <section id="ip" class="view"><div class="page-title"><div class="eyebrow">MODULE 01</div><h1>IP Intelligence</h1><p>Start with your own address or an IP you are authorized to investigate.</p></div><div class="panel"><div class="search-row"><input id="ipInput" placeholder="e.g. 8.8.8.8" /><button id="ipButton">Inspect IP <span>→</span></button></div><div id="ipResult" class="result empty">Enter an IP to open the inspection panel.</div></div></section>
+    <section id="domain" class="view"><div class="page-title"><div class="eyebrow">MODULE 02</div><h1>Domain Intelligence</h1><p>Free public intelligence: DNS records, DNSSEC signals and Certificate Transparency names.</p></div><div class="panel"><div class="search-row"><input id="domainInput" placeholder="example.com" /><button id="dnsButton">Inspect domain <span>→</span></button></div><div id="dnsResult" class="result empty">A, AAAA, MX, NS, TXT, DNSSEC and passive certificate names will appear here.</div></div></section>
+    <section id="email" class="view"><div class="page-title"><div class="eyebrow">MODULE 03</div><h1>Email Breach</h1><p>Check public breach exposure without displaying passwords or leaked secrets.</p></div><div class="panel"><div class="search-row"><input id="emailInput" type="email" autocomplete="off" placeholder="you@example.com" /><button id="emailButton">Check exposure <span>→</span></button></div><div id="emailResult" class="result empty">Enter an email address. The server checks breach metadata through the configured provider.</div></div></section>
+    <section id="hash" class="view"><div class="page-title"><div class="eyebrow">MODULE 04</div><h1>Hash Toolkit</h1><p>Hash input locally through the Web404 backend. Nothing is stored.</p></div><div class="panel"><textarea id="hashInput" rows="5" placeholder="Enter text to hash…"></textarea><button class="full-btn" id="hashButton">Generate hashes <span>→</span></button><div id="hashResult" class="hash-list"></div></div></section>
+    <section id="username" class="view"><div class="page-title"><div class="eyebrow">MODULE 05</div><h1>Username OSINT</h1><p>Use this as a structured, consent-based research workspace.</p></div><div class="panel"><div class="search-row"><input id="userInput" placeholder="username" /><button id="usernameButton">Build search map <span>→</span></button></div><div id="userResult" class="result empty">Enter a username to generate public-platform search links.</div></div></section>
+    <section id="headers" class="view"><div class="page-title"><div class="eyebrow">MODULE 06</div><h1>Header Scanner</h1><p>Check common HTTP security headers on a site you control or are authorized to assess.</p></div><div class="panel"><div class="search-row"><input id="urlInput" placeholder="https://example.com" /><button id="headersButton">Scan headers <span>→</span></button></div><div id="headerResult" class="result empty">Security header coverage will be calculated here.</div></div></section>
+    <section id="findings" class="view"><div class="page-title"><div class="eyebrow">INVESTIGATION</div><h1>Findings</h1><p>Record actionable observations without storing them permanently.</p></div><div class="panel"><div class="finding-form"><input id="findingTitle" placeholder="Finding title" /><select id="findingSeverity"><option value="info">Info</option><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="critical">Critical</option></select><input id="findingConfidence" placeholder="Confidence e.g. High" /><input id="findingSource" placeholder="Source / module" /><textarea id="findingEvidence" rows="3" placeholder="Evidence"></textarea><textarea id="findingRemediation" rows="3" placeholder="Recommended remediation"></textarea><div class="search-row"><button id="addFindingButton">Add finding <span>→</span></button><button id="clearFindingsButton" type="button">Clear all</button></div></div><div id="findingsResult" class="result empty">No findings recorded in this session.</div></div></section>
+    <section id="ai" class="view"><div class="page-title"><div class="eyebrow">MODULE 08</div><h1>AI Cyber Assistant</h1><p>Gemini-powered defensive analysis using the investigation context collected in this session.</p></div><div class="chat panel"><div id="chatLog" class="chat-log"><div class="bubble bot"><b>Web404 AI</b><br>I can analyze your current Web404 investigation context. Run a module first, then ask me what it means, what matters most, or what defensive step to take next.</div></div><div class="chat-input"><input id="chatInput" placeholder="Ask about the current investigation…"/><button id="aiButton">Send</button></div></div></section>
   </main>
   <script src="/app.js"></script>
+  <script src="/auto-findings.js"></script>
+  <script src="/finding-status.js"></script>
 </body>
 </html>
