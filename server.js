@@ -34,7 +34,7 @@ app.use('/api', (req, res, next) => {
 });
 setInterval(() => { const cutoff = Date.now() - WINDOW * 2; for (const [k, v] of buckets) if (v.start < cutoff) buckets.delete(k); }, WINDOW).unref();
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Web404', version: '1.1.0' }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Web404', version: '1.2.0' }));
 
 function cleanDomain(value) {
   let domain = String(value || '').trim().replace(/^https?:\/\//i, '').split('/')[0].split('?')[0].replace(/\.$/, '').toLowerCase();
@@ -53,14 +53,28 @@ function isBlockedAddress(hostname) {
   return false;
 }
 
+function isPublicIP(ip) { return net.isIP(ip) > 0 && !isBlockedAddress(ip); }
+
+app.post('/api/ip', async (req, res) => {
+  const ip = String(req.body?.ip || '').trim();
+  if (!net.isIP(ip)) return res.status(400).json({ error: 'Enter a valid IPv4 or IPv6 address.' });
+  if (!isPublicIP(ip)) return res.status(400).json({ error: 'Private or reserved IP addresses are not supported.' });
+  try {
+    const response = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`, { signal: AbortSignal.timeout(8000) });
+    if (!response.ok) throw new Error('Provider unavailable');
+    const data = await response.json();
+    if (data.success === false) return res.status(400).json({ error: data.message || 'IP intelligence lookup failed.' });
+    let reverseDns = [];
+    try { reverseDns = await dns.reverse(ip); } catch {}
+    res.json({ ip: data.ip || ip, type: data.type || (net.isIPv4(ip) ? 'IPv4' : 'IPv6'), continent: data.continent || null, country: data.country || null, region: data.region || null, city: data.city || null, latitude: data.latitude ?? null, longitude: data.longitude ?? null, timezone: data.timezone?.id || null, asn: data.connection?.asn || null, organization: data.connection?.org || null, isp: data.connection?.isp || null, reverseDns });
+  } catch { res.status(502).json({ error: 'IP intelligence provider is unavailable.' }); }
+});
+
 app.post('/api/dns', async (req, res) => {
   const domain = cleanDomain(req.body?.domain);
   if (!domain) return res.status(400).json({ error: 'Enter a valid domain name.' });
   try {
-    const [A, AAAA, MX, NS, TXT] = await Promise.all([
-      dns.resolve4(domain).catch(() => []), dns.resolve6(domain).catch(() => []),
-      dns.resolveMx(domain).catch(() => []), dns.resolveNs(domain).catch(() => []), dns.resolveTxt(domain).catch(() => [])
-    ]);
+    const [A, AAAA, MX, NS, TXT] = await Promise.all([dns.resolve4(domain).catch(() => []), dns.resolve6(domain).catch(() => []), dns.resolveMx(domain).catch(() => []), dns.resolveNs(domain).catch(() => []), dns.resolveTxt(domain).catch(() => [])]);
     res.json({ domain, A, AAAA, MX, NS, TXT: TXT.flat() });
   } catch { res.status(400).json({ error: 'DNS lookup failed.' }); }
 });
