@@ -5,6 +5,7 @@ import net from 'node:net';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HIBP_API_KEY = process.env.HIBP_API_KEY || '';
 const buckets = new Map();
 const WINDOW = 60_000;
 const LIMIT = 60;
@@ -34,7 +35,7 @@ app.use('/api', (req, res, next) => {
 });
 setInterval(() => { const cutoff = Date.now() - WINDOW * 2; for (const [k, v] of buckets) if (v.start < cutoff) buckets.delete(k); }, WINDOW).unref();
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Web404', version: '1.2.0' }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Web404', version: '1.3.0', integrations: { hibp: Boolean(HIBP_API_KEY) } }));
 
 function cleanDomain(value) {
   let domain = String(value || '').trim().replace(/^https?:\/\//i, '').split('/')[0].split('?')[0].replace(/\.$/, '').toLowerCase();
@@ -55,6 +56,10 @@ function isBlockedAddress(hostname) {
 
 function isPublicIP(ip) { return net.isIP(ip) > 0 && !isBlockedAddress(ip); }
 
+function validEmail(email) {
+  return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 app.post('/api/ip', async (req, res) => {
   const ip = String(req.body?.ip || '').trim();
   if (!net.isIP(ip)) return res.status(400).json({ error: 'Enter a valid IPv4 or IPv6 address.' });
@@ -68,6 +73,25 @@ app.post('/api/ip', async (req, res) => {
     try { reverseDns = await dns.reverse(ip); } catch {}
     res.json({ ip: data.ip || ip, type: data.type || (net.isIPv4(ip) ? 'IPv4' : 'IPv6'), continent: data.continent || null, country: data.country || null, region: data.region || null, city: data.city || null, latitude: data.latitude ?? null, longitude: data.longitude ?? null, timezone: data.timezone?.id || null, asn: data.connection?.asn || null, organization: data.connection?.org || null, isp: data.connection?.isp || null, reverseDns });
   } catch { res.status(502).json({ error: 'IP intelligence provider is unavailable.' }); }
+});
+
+app.post('/api/breach', async (req, res) => {
+  if (!HIBP_API_KEY) return res.status(503).json({ error: 'Email breach checking is not configured. Add HIBP_API_KEY to the server environment.' });
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  if (!validEmail(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+  try {
+    const response = await fetch(`https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`, {
+      headers: { 'hibp-api-key': HIBP_API_KEY, 'user-agent': 'Web404-by-EncrScripter/1.3' },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (response.status === 404) return res.json({ email, breached: false, breaches: [] });
+    if (response.status === 401) return res.status(502).json({ error: 'Breach provider rejected the configured API key.' });
+    if (response.status === 403) return res.status(502).json({ error: 'Breach provider rejected the request. Check API access and user-agent configuration.' });
+    if (response.status === 429) return res.status(429).json({ error: 'Breach provider rate limit reached. Try again later.' });
+    if (!response.ok) return res.status(502).json({ error: 'Breach provider is temporarily unavailable.' });
+    const breaches = await response.json();
+    res.json({ email, breached: breaches.length > 0, breachCount: breaches.length, breaches: breaches.map(b => ({ name: b.Name, title: b.Title, domain: b.Domain, breachDate: b.BreachDate, dataClasses: b.DataClasses, verified: b.IsVerified, spamList: b.IsSpamList, malware: b.IsMalware })) });
+  } catch { res.status(502).json({ error: 'Could not reach the breach intelligence provider.' }); }
 });
 
 app.post('/api/dns', async (req, res) => {
