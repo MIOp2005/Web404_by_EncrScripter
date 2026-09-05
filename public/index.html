@@ -24,7 +24,7 @@
       <button class="nav" data-view="headers"><span>↯</span> Header Scanner</button>
       <button class="nav" data-view="ai"><span>✦</span> AI Assistant</button>
     </nav>
-    <div class="sidebar-foot"><div class="status-dot"></div><span>Local engine online</span><kbd>v1.2</kbd></div>
+    <div class="sidebar-foot"><div class="status-dot"></div><span>Local engine online</span><kbd>v1.3</kbd></div>
   </aside>
 
   <main>
@@ -36,7 +36,7 @@
       <div class="tool-grid">
         <article class="tool-card" data-open="ip"><span class="tool-icon blue">◉</span><div><h3>IP Intelligence</h3><p>Inspect public IP context and network metadata.</p></div><span class="arrow">↗</span></article>
         <article class="tool-card" data-open="domain"><span class="tool-icon violet">⌁</span><div><h3>Domain & DNS</h3><p>Resolve A, AAAA, MX, NS and TXT records.</p></div><span class="arrow">↗</span></article>
-        <article class="tool-card" data-open="email"><span class="tool-icon orange">✉</span><div><h3>Email Breach</h3><p>Check breach exposure with privacy-safe integrations.</p></div><span class="arrow">↗</span></article>
+        <article class="tool-card" data-open="email"><span class="tool-icon orange">✉</span><div><h3>Email Breach</h3><p>Check public breach exposure through a server-side provider.</p></div><span class="arrow">↗</span></article>
         <article class="tool-card" data-open="hash"><span class="tool-icon green">#</span><div><h3>Hash Toolkit</h3><p>Generate common cryptographic hashes locally.</p></div><span class="arrow">↗</span></article>
         <article class="tool-card" data-open="username"><span class="tool-icon pink">@</span><div><h3>Username OSINT</h3><p>Build an authorized username investigation checklist.</p></div><span class="arrow">↗</span></article>
         <article class="tool-card" data-open="headers"><span class="tool-icon cyan">↯</span><div><h3>Header Scanner</h3><p>Audit common web security response headers.</p></div><span class="arrow">↗</span></article>
@@ -48,7 +48,7 @@
 
     <section id="domain" class="view"><div class="page-title"><div class="eyebrow">MODULE 02</div><h1>Domain & DNS</h1><p>Resolve public DNS records from the local server.</p></div><div class="panel"><div class="search-row"><input id="domainInput" placeholder="example.com" /><button id="dnsButton">Resolve DNS <span>→</span></button></div><div id="dnsResult" class="result empty">A, AAAA, MX, NS and TXT records will appear here.</div></div></section>
 
-    <section id="email" class="view"><div class="page-title"><div class="eyebrow">MODULE 03</div><h1>Email Breach</h1><p>Privacy-first workflow. No breach database is queried by this demo.</p></div><div class="panel"><div class="search-row"><input id="emailInput" type="email" placeholder="you@example.com" /><button id="emailButton">Check exposure <span>→</span></button></div><div id="emailResult" class="result empty">For production, connect an approved breach-intelligence provider server-side. Never expose API keys in the browser.</div></div></section>
+    <section id="email" class="view"><div class="page-title"><div class="eyebrow">MODULE 03</div><h1>Email Breach</h1><p>Check public breach exposure without displaying passwords or leaked secrets.</p></div><div class="panel"><div class="search-row"><input id="emailInput" type="email" autocomplete="off" placeholder="you@example.com" /><button id="emailButton">Check exposure <span>→</span></button></div><div id="emailResult" class="result empty">Enter an email address. The server checks breach metadata through the configured provider.</div></div></section>
 
     <section id="hash" class="view"><div class="page-title"><div class="eyebrow">MODULE 04</div><h1>Hash Toolkit</h1><p>Hash input locally through the Web404 backend. Nothing is stored.</p></div><div class="panel"><textarea id="hashInput" rows="5" placeholder="Enter text to hash…"></textarea><button class="full-btn" id="hashButton">Generate hashes <span>→</span></button><div id="hashResult" class="hash-list"></div></div></section>
 
