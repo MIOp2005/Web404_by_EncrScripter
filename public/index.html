@@ -24,7 +24,7 @@
       <button class="nav" data-view="headers"><span>↯</span> Header Scanner</button>
       <button class="nav" data-view="ai"><span>✦</span> AI Assistant</button>
     </nav>
-    <div class="sidebar-foot"><div class="status-dot"></div><span>Local engine online</span><kbd>v1.3</kbd></div>
+    <div class="sidebar-foot"><div class="status-dot"></div><span>Local engine online</span><kbd>v1.4</kbd></div>
   </aside>
 
   <main>
@@ -35,7 +35,7 @@
       <div class="section-head"><div><h2>Toolkit</h2><p>Pick a module to start an investigation.</p></div><span class="tag">7 MODULES</span></div>
       <div class="tool-grid">
         <article class="tool-card" data-open="ip"><span class="tool-icon blue">◉</span><div><h3>IP Intelligence</h3><p>Inspect public IP context and network metadata.</p></div><span class="arrow">↗</span></article>
-        <article class="tool-card" data-open="domain"><span class="tool-icon violet">⌁</span><div><h3>Domain & DNS</h3><p>Resolve A, AAAA, MX, NS and TXT records.</p></div><span class="arrow">↗</span></article>
+        <article class="tool-card" data-open="domain"><span class="tool-icon violet">⌁</span><div><h3>Domain & DNS</h3><p>DNS records, DNSSEC status and passive certificate names.</p></div><span class="arrow">↗</span></article>
         <article class="tool-card" data-open="email"><span class="tool-icon orange">✉</span><div><h3>Email Breach</h3><p>Check public breach exposure through a server-side provider.</p></div><span class="arrow">↗</span></article>
         <article class="tool-card" data-open="hash"><span class="tool-icon green">#</span><div><h3>Hash Toolkit</h3><p>Generate common cryptographic hashes locally.</p></div><span class="arrow">↗</span></article>
         <article class="tool-card" data-open="username"><span class="tool-icon pink">@</span><div><h3>Username OSINT</h3><p>Build an authorized username investigation checklist.</p></div><span class="arrow">↗</span></article>
@@ -46,7 +46,7 @@
 
     <section id="ip" class="view"><div class="page-title"><div class="eyebrow">MODULE 01</div><h1>IP Intelligence</h1><p>Start with your own address or an IP you are authorized to investigate.</p></div><div class="panel"><div class="search-row"><input id="ipInput" placeholder="e.g. 8.8.8.8" /><button id="ipButton">Inspect IP <span>→</span></button></div><div id="ipResult" class="result empty">Enter an IP to open the inspection panel.</div></div></section>
 
-    <section id="domain" class="view"><div class="page-title"><div class="eyebrow">MODULE 02</div><h1>Domain & DNS</h1><p>Resolve public DNS records from the local server.</p></div><div class="panel"><div class="search-row"><input id="domainInput" placeholder="example.com" /><button id="dnsButton">Resolve DNS <span>→</span></button></div><div id="dnsResult" class="result empty">A, AAAA, MX, NS and TXT records will appear here.</div></div></section>
+    <section id="domain" class="view"><div class="page-title"><div class="eyebrow">MODULE 02</div><h1>Domain Intelligence</h1><p>Free public intelligence: DNS records, DNSSEC signals and Certificate Transparency names.</p></div><div class="panel"><div class="search-row"><input id="domainInput" placeholder="example.com" /><button id="dnsButton">Inspect domain <span>→</span></button></div><div id="dnsResult" class="result empty">A, AAAA, MX, NS, TXT, DNSSEC and passive certificate names will appear here.</div></div></section>
 
     <section id="email" class="view"><div class="page-title"><div class="eyebrow">MODULE 03</div><h1>Email Breach</h1><p>Check public breach exposure without displaying passwords or leaked secrets.</p></div><div class="panel"><div class="search-row"><input id="emailInput" type="email" autocomplete="off" placeholder="you@example.com" /><button id="emailButton">Check exposure <span>→</span></button></div><div id="emailResult" class="result empty">Enter an email address. The server checks breach metadata through the configured provider.</div></div></section>
 
