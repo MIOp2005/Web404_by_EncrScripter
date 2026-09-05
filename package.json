@@ -1,0 +1,17 @@
+{
+  "name": "web404-by-encripscripter",
+  "version": "1.0.0",
+  "description": "Web404 — an all-in-one defensive cybersecurity intelligence toolkit.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
