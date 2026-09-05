@@ -14,7 +14,6 @@ const LIMIT = 60;
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb', strict: true }));
-app.use(express.static('public', { dotfiles: 'deny' }));
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -23,6 +22,7 @@ app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   next();
 });
+app.use(express.static('public', { dotfiles: 'deny' }));
 app.use('/api', (req, res, next) => {
   const now = Date.now(); const key = req.ip || req.socket.remoteAddress || 'unknown'; const bucket = buckets.get(key) || { start: now, count: 0 };
   if (now - bucket.start >= WINDOW) { bucket.start = now; bucket.count = 0; } bucket.count += 1; buckets.set(key, bucket);
