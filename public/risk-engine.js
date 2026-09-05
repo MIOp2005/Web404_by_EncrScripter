@@ -44,11 +44,11 @@
     const score = $('securityScore');
     const label = $('securityScoreLabel');
     const status = $('dashboardStatus');
-    if (!score || !label || !status) return;
+    if (!score || !label) return;
     score.textContent = `${risk.score}`;
     score.className = risk.score >= 40 ? 'warn' : 'good';
     label.textContent = `${risk.rating} investigation risk`;
-    status.textContent = risk.score >= 60 ? 'ATTENTION' : risk.score >= 40 ? 'REVIEW' : 'ASSESSED';
+    if (status) status.textContent = risk.score >= 60 ? 'ATTENTION' : risk.score >= 40 ? 'REVIEW' : 'ASSESSED';
   }
 
   async function refreshRisk() {
@@ -78,5 +78,5 @@
     if (event.target?.id === 'generateReportButton') setTimeout(patchReport, 500);
   });
   refreshRisk();
-  setInterval(refreshRisk, 5000);
+  setInterval(refreshRisk, 10000);
 })();
