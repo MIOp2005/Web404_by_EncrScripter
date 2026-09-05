@@ -1,28 +1,36 @@
 (() => {
   const $ = id => document.getElementById(id);
-  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-  function context() {
-    const source = window.aiContext || {};
+  async function context() {
+    let findings = [];
+    try {
+      const r = await fetch('/api/findings');
+      if (r.ok) findings = (await r.json()).findings || [];
+    } catch {}
+
+    const headerResult = $('headerResult');
+    const headerScoreNode = headerResult?.querySelector('.score');
+    const headerScore = headerScoreNode ? Number.parseInt(headerScoreNode.textContent, 10) : NaN;
+    const emailText = $('emailResult')?.textContent || '';
+    const domainText = $('dnsResult')?.textContent || '';
+
     return {
-      findings: Array.isArray(source.findings) ? source.findings : [],
+      findings,
       observations: {
-        headers: source.headers || null,
-        email: source.email || null,
-        domain: source.domain ? {
-          domain: source.domain.domain,
-          dnssec: source.domain.dnssec
-        } : null
+        headers: Number.isFinite(headerScore) ? { score: headerScore } : null,
+        email: emailText.includes('BREACH') ? { breached: true } : emailText.includes('NO KNOWN BREACHES') ? { breached: false } : null,
+        domain: domainText.includes('DNSSEC') ? { dnssec: /DNSSEC\s+Not detected/i.test(domainText) } : null
       }
     };
   }
 
   async function calculateRisk() {
     try {
+      const payload = await context();
       const r = await fetch('/api/risk', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(context())
+        body: JSON.stringify(payload)
       });
       if (!r.ok) return null;
       return await r.json();
@@ -38,7 +46,7 @@
     const status = $('dashboardStatus');
     if (!score || !label || !status) return;
     score.textContent = `${risk.score}`;
-    score.className = risk.score >= 60 ? 'warn' : risk.score >= 40 ? 'warn' : 'good';
+    score.className = risk.score >= 40 ? 'warn' : 'good';
     label.textContent = `${risk.rating} investigation risk`;
     status.textContent = risk.score >= 60 ? 'ATTENTION' : risk.score >= 40 ? 'REVIEW' : 'ASSESSED';
   }
@@ -66,14 +74,9 @@
   }
 
   window.web404Risk = { calculateRisk, refreshRisk, patchReport };
-
-  document.addEventListener('click', async event => {
-    if (event.target?.id === 'generateReportButton') {
-      await wait(300);
-      await patchReport();
-    }
+  document.addEventListener('click', event => {
+    if (event.target?.id === 'generateReportButton') setTimeout(patchReport, 500);
   });
-
-  setTimeout(refreshRisk, 500);
+  refreshRisk();
   setInterval(refreshRisk, 5000);
 })();
