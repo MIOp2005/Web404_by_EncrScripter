@@ -1,6 +1,12 @@
 (() => {
   const $ = id => document.getElementById(id);
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  const riskScript = document.createElement('script');
+  riskScript.src = '/risk-engine.js';
+  riskScript.defer = true;
+  document.body.appendChild(riskScript);
+
   async function postFinding(finding) {
     try {
       const r = await fetch('/api/findings');
