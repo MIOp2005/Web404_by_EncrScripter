@@ -35,7 +35,7 @@ app.use('/api', (req, res, next) => {
 });
 setInterval(() => { const cutoff = Date.now() - WINDOW * 2; for (const [k, v] of buckets) if (v.start < cutoff) buckets.delete(k); }, WINDOW).unref();
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Web404', version: '1.3.0', integrations: { hibp: Boolean(HIBP_API_KEY) } }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Web404', version: '1.4.0', integrations: { hibp: Boolean(HIBP_API_KEY) } }));
 
 function cleanDomain(value) {
   let domain = String(value || '').trim().replace(/^https?:\/\//i, '').split('/')[0].split('?')[0].replace(/\.$/, '').toLowerCase();
@@ -55,9 +55,17 @@ function isBlockedAddress(hostname) {
 }
 
 function isPublicIP(ip) { return net.isIP(ip) > 0 && !isBlockedAddress(ip); }
+function validEmail(email) { return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
 
-function validEmail(email) {
-  return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+async function resolveDNS(domain) {
+  const [A, AAAA, MX, NS, TXT] = await Promise.all([
+    dns.resolve4(domain).catch(() => []),
+    dns.resolve6(domain).catch(() => []),
+    dns.resolveMx(domain).catch(() => []),
+    dns.resolveNs(domain).catch(() => []),
+    dns.resolveTxt(domain).catch(() => [])
+  ]);
+  return { A, AAAA, MX, NS, TXT: TXT.flat() };
 }
 
 app.post('/api/ip', async (req, res) => {
@@ -81,7 +89,7 @@ app.post('/api/breach', async (req, res) => {
   if (!validEmail(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
   try {
     const response = await fetch(`https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`, {
-      headers: { 'hibp-api-key': HIBP_API_KEY, 'user-agent': 'Web404-by-EncrScripter/1.3' },
+      headers: { 'hibp-api-key': HIBP_API_KEY, 'user-agent': 'Web404-by-EncrScripter/1.4' },
       signal: AbortSignal.timeout(8000)
     });
     if (response.status === 404) return res.json({ email, breached: false, breaches: [] });
@@ -97,10 +105,42 @@ app.post('/api/breach', async (req, res) => {
 app.post('/api/dns', async (req, res) => {
   const domain = cleanDomain(req.body?.domain);
   if (!domain) return res.status(400).json({ error: 'Enter a valid domain name.' });
+  try { res.json({ domain, ...(await resolveDNS(domain)) }); }
+  catch { res.status(400).json({ error: 'DNS lookup failed.' }); }
+});
+
+app.post('/api/domain', async (req, res) => {
+  const domain = cleanDomain(req.body?.domain);
+  if (!domain) return res.status(400).json({ error: 'Enter a valid domain name.' });
   try {
-    const [A, AAAA, MX, NS, TXT] = await Promise.all([dns.resolve4(domain).catch(() => []), dns.resolve6(domain).catch(() => []), dns.resolveMx(domain).catch(() => []), dns.resolveNs(domain).catch(() => []), dns.resolveTxt(domain).catch(() => [])]);
-    res.json({ domain, A, AAAA, MX, NS, TXT: TXT.flat() });
-  } catch { res.status(400).json({ error: 'DNS lookup failed.' }); }
+    const records = await resolveDNS(domain);
+    let subdomains = [];
+    let certificates = 0;
+    try {
+      const r = await fetch(`https://crt.sh/?q=${encodeURIComponent(`%.${domain}`)}&output=json`, {
+        headers: { 'user-agent': 'Web404-by-EncrScripter/1.4' },
+        signal: AbortSignal.timeout(10000)
+      });
+      if (r.ok) {
+        const rows = await r.json();
+        const names = new Set();
+        for (const row of rows) {
+          certificates += 1;
+          for (const raw of String(row.name_value || '').split(/\s+/)) {
+            const name = raw.trim().toLowerCase().replace(/^\*\./, '');
+            if (name && (name === domain || name.endsWith(`.${domain}`)) && name.length <= 253) names.add(name);
+          }
+        }
+        subdomains = [...names].sort().slice(0, 200);
+      }
+    } catch {}
+    let dnssec = false;
+    try {
+      const r = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=DNSKEY&do=true`, { headers: { accept: 'application/dns-json' }, signal: AbortSignal.timeout(5000) });
+      if (r.ok) { const data = await r.json(); dnssec = Boolean(data.AD || (data.Answer || []).length); }
+    } catch {}
+    res.json({ domain, ...records, dnssec, certificateCount: certificates, subdomains, sources: ['Public DNS', 'Certificate Transparency'] });
+  } catch { res.status(400).json({ error: 'Domain intelligence lookup failed.' }); }
 });
 
 app.post('/api/hash', (req, res) => {
