@@ -6,6 +6,8 @@ import net from 'node:net';
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HIBP_API_KEY = process.env.HIBP_API_KEY || '';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 const buckets = new Map();
 const WINDOW = 60_000;
 const LIMIT = 60;
@@ -27,7 +29,7 @@ app.use('/api', (req, res, next) => {
   if (bucket.count > LIMIT) return res.status(429).json({ error: 'Rate limit exceeded. Try again shortly.' }); next();
 });
 setInterval(() => { const cutoff = Date.now() - WINDOW * 2; for (const [k, v] of buckets) if (v.start < cutoff) buckets.delete(k); }, WINDOW).unref();
-app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Web404', version: '1.5.0', integrations: { hibp: Boolean(HIBP_API_KEY) } }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Web404', version: '1.6.0', integrations: { hibp: Boolean(HIBP_API_KEY), gemini: Boolean(GEMINI_API_KEY) } }));
 function cleanDomain(value) { let domain = String(value || '').trim().replace(/^https?:\/\//i, '').split('/')[0].split('?')[0].replace(/\.$/, '').toLowerCase(); if (domain.length > 253 || !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(domain)) return null; return domain; }
 function isBlockedAddress(hostname) { const h = hostname.toLowerCase().replace(/^\[|\]$/g, ''); if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h === '0.0.0.0') return true; if (net.isIPv4(h)) { const [a,b] = h.split('.').map(Number); return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168); } if (net.isIPv6(h)) return h === '::1' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80:'); return false; }
 function isPublicIP(ip) { return net.isIP(ip) > 0 && !isBlockedAddress(ip); }
@@ -44,5 +46,28 @@ const findings=[]; const MAX_FINDINGS=100;
 app.post('/api/findings',(req,res)=>{const {title,severity,evidence,confidence,source,remediation}=req.body||{};const allowed=['info','low','medium','high','critical'];if(!String(title||'').trim()||!allowed.includes(String(severity||'').toLowerCase()))return res.status(400).json({error:'Title and a valid severity are required.'});const clean=v=>String(v||'').trim().slice(0,2000);const finding={id:crypto.randomUUID(),timestamp:new Date().toISOString(),title:clean(title).slice(0,200),severity:String(severity).toLowerCase(),evidence:clean(evidence),confidence:clean(confidence).slice(0,50),source:clean(source).slice(0,200),remediation:clean(remediation)};findings.unshift(finding);if(findings.length>MAX_FINDINGS)findings.pop();res.status(201).json(finding);});
 app.get('/api/findings',(_req,res)=>res.json({findings}));
 app.delete('/api/findings',(_req,res)=>{findings.length=0;res.status(204).end();});
+
+const AI_SYSTEM = `You are Web404 AI, a defensive cybersecurity analyst inside an authorized security toolkit. Help users understand security findings, logs, DNS, HTTP headers, hashes, IP intelligence, incident-response concepts, secure coding, threat modeling, and remediation. Keep guidance lawful, defensive, and authorization-aware. Do not provide instructions for credential theft, malware deployment, persistence, evasion, destructive actions, unauthorized access, or exposing private personal data. For potentially dual-use requests, provide safe high-level explanation, detection, validation in a lab, or remediation instead. Be concise and practical. Never claim to have scanned a target or accessed data unless the Web404 application actually supplied that data.`;
+app.post('/api/ai', async (req,res)=>{
+  if(!GEMINI_API_KEY)return res.status(503).json({error:'AI Assistant is not configured. Add GEMINI_API_KEY to the server environment.'});
+  const message=String(req.body?.message||'').trim();
+  if(!message)return res.status(400).json({error:'Enter a message.'});
+  if(message.length>8000)return res.status(400).json({error:'Message is too long. Keep it under 8,000 characters.'});
+  try{
+    const response=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
+      method:'POST',
+      headers:{'content-type':'application/json','x-goog-api-key':GEMINI_API_KEY},
+      body:JSON.stringify({model:GEMINI_MODEL,input:message,system_instruction:AI_SYSTEM,store:false}),
+      signal:AbortSignal.timeout(30000)
+    });
+    if(response.status===401||response.status===403)return res.status(502).json({error:'Gemini rejected the configured API key.'});
+    if(response.status===429)return res.status(429).json({error:'Gemini rate limit reached. Try again shortly.'});
+    if(!response.ok)return res.status(502).json({error:'Gemini AI service is temporarily unavailable.'});
+    const data=await response.json();
+    const output=String(data.output_text||'').trim();
+    if(!output)return res.status(502).json({error:'Gemini returned no text response.'});
+    res.json({reply:output,model:data.model||GEMINI_MODEL});
+  }catch{res.status(502).json({error:'Could not reach the Gemini AI service.'});}
+});
 
 app.listen(PORT,()=>console.log(`Web404 running on http://localhost:${PORT}`));
