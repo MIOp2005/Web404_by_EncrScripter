@@ -1,0 +1,35 @@
+(() => {
+  const $ = id => document.getElementById(id);
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const bytesToHex = bytes => Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
+  const hexToBytes = hex => { const clean = hex.replace(/\s+/g, '').toLowerCase(); if (!/^(?:[0-9a-f]{2})+$/.test(clean)) throw new Error('Enter an even-length hexadecimal value.'); const out = new Uint8Array(clean.length / 2); for (let i=0;i<out.length;i++) out[i]=parseInt(clean.slice(i*2,i*2+2),16); return out; };
+  const b64 = bytes => { let s=''; for(let i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode(...bytes.subarray(i,i+0x8000)); return btoa(s); };
+  const unb64 = value => { const s=atob(value); const out=new Uint8Array(s.length); for(let i=0;i<s.length;i++)out[i]=s.charCodeAt(i); return out; };
+  async function digest(algorithm, data) { return bytesToHex(await crypto.subtle.digest(algorithm, data)); }
+
+  function build() {
+    const panel = $('hash')?.querySelector('.panel');
+    if (!panel || $('hashLab')) return;
+    const lab=document.createElement('div'); lab.id='hashLab'; lab.className='hash-lab';
+    lab.innerHTML=`<div class="hash-lab-head"><div><span class="eyebrow">HASH LAB</span><h2>Advanced Hash Utilities</h2><p>Local tools for hashing, file fingerprints, digest comparison and encoding.</p></div><span class="tag">CLIENT-SIDE</span></div>
+      <div class="hash-tabs" role="tablist"><button type="button" class="hash-tab active" data-hash-tab="text">Text Hash</button><button type="button" class="hash-tab" data-hash-tab="file">File Hash</button><button type="button" class="hash-tab" data-hash-tab="compare">Compare</button><button type="button" class="hash-tab" data-hash-tab="encoding">Base64</button></div>
+      <div class="hash-pane active" data-hash-pane="text"><textarea id="hashLocalText" rows="4" placeholder="Enter text to hash locally…"></textarea><div class="hash-checks"><label><input type="checkbox" data-algo="SHA-1"> SHA-1</label><label><input type="checkbox" data-algo="SHA-256" checked> SHA-256</label><label><input type="checkbox" data-algo="SHA-384"> SHA-384</label><label><input type="checkbox" data-algo="SHA-512" checked> SHA-512</label></div><button type="button" class="hash-action" id="hashLocalRun">Hash locally</button><div id="hashLocalResult" class="hash-output empty">Choose algorithms and enter text.</div></div>
+      <div class="hash-pane" data-hash-pane="file"><input id="hashFile" type="file"><p class="hash-help">The file stays in your browser. No upload is performed.</p><button type="button" class="hash-action" id="hashFileRun">Hash selected file</button><div id="hashFileResult" class="hash-output empty">Select a file to calculate its SHA-256 and SHA-512 fingerprints.</div></div>
+      <div class="hash-pane" data-hash-pane="compare"><input id="hashA" spellcheck="false" placeholder="Expected hash"><input id="hashB" spellcheck="false" placeholder="Actual hash"><button type="button" class="hash-action" id="hashCompareRun">Compare hashes</button><div id="hashCompareResult" class="hash-output empty">Paste two hexadecimal hashes to compare them.</div></div>
+      <div class="hash-pane" data-hash-pane="encoding"><textarea id="base64Input" rows="4" placeholder="Text to encode, or Base64 to decode…"></textarea><div class="hash-actions"><button type="button" class="hash-action" id="base64Encode">Encode Base64</button><button type="button" class="hash-action secondary" id="base64Decode">Decode Base64</button></div><div id="base64Result" class="hash-output empty">Base64 conversion happens locally.</div></div>`;
+    panel.appendChild(lab);
+
+    const tabs=lab.querySelectorAll('[data-hash-tab]'), panes=lab.querySelectorAll('[data-hash-pane]');
+    tabs.forEach(tab=>tab.addEventListener('click',()=>{tabs.forEach(x=>x.classList.toggle('active',x===tab));panes.forEach(x=>x.classList.toggle('active',x.dataset.hashPane===tab.dataset.hashTab));}));
+    $('hashLocalRun').addEventListener('click',async()=>{const input=$('hashLocalText').value;const algorithms=[...lab.querySelectorAll('[data-algo]:checked')].map(x=>x.dataset.algo);const out=$('hashLocalResult');if(!input){out.textContent='Enter text first.';return}if(!algorithms.length){out.textContent='Select at least one algorithm.';return}out.textContent='Hashing locally…';try{const data=encoder.encode(input);const rows=await Promise.all(algorithms.map(async a=>[a,await digest(a,data)]));out.innerHTML=rows.map(([a,v])=>`<div class="hash-result-row"><b>${a}</b><code>${v}</code><button type="button" data-copy="${v}">Copy</button></div>`).join('');out.querySelectorAll('[data-copy]').forEach(b=>b.addEventListener('click',()=>navigator.clipboard?.writeText(b.dataset.copy)));}catch{out.textContent='Local hashing failed in this browser.';}});
+    $('hashFileRun').addEventListener('click',async()=>{const file=$('hashFile').files?.[0],out=$('hashFileResult');if(!file){out.textContent='Select a file first.';return}out.textContent='Reading file locally…';try{const data=new Uint8Array(await file.arrayBuffer());const [sha256,sha512]=await Promise.all([digest('SHA-256',data),digest('SHA-512',data)]);out.innerHTML=`<div class="file-meta"><b>${file.name}</b><span>${file.size.toLocaleString()} bytes</span></div><div class="hash-result-row"><b>SHA-256</b><code>${sha256}</code><button type="button" data-copy="${sha256}">Copy</button></div><div class="hash-result-row"><b>SHA-512</b><code>${sha512}</code><button type="button" data-copy="${sha512}">Copy</button></div>`;out.querySelectorAll('[data-copy]').forEach(b=>b.addEventListener('click',()=>navigator.clipboard?.writeText(b.dataset.copy)));}catch{out.textContent='Could not read or hash the selected file.';}});
+    $('hashCompareRun').addEventListener('click',()=>{const a=$('hashA').value.trim().replace(/\s+/g,'').toLowerCase(),b=$('hashB').value.trim().replace(/\s+/g,'').toLowerCase(),out=$('hashCompareResult');if(!a||!b){out.textContent='Enter both hashes.';return}try{const aa=hexToBytes(a),bb=hexToBytes(b);if(aa.length!==bb.length){out.textContent='NOT A MATCH — different digest lengths.';return}let diff=0;for(let i=0;i<aa.length;i++)diff|=aa[i]^bb[i];out.textContent=diff===0?'MATCH — hashes are identical.':'NO MATCH — hashes differ.';}catch(e){out.textContent=e.message;}});
+    $('base64Encode').addEventListener('click',()=>{$('base64Result').textContent=b64(encoder.encode($('base64Input').value));});
+    $('base64Decode').addEventListener('click',()=>{try{$('base64Result').textContent=decoder.decode(unb64($('base64Input').value.trim()));}catch{$('base64Result').textContent='Invalid Base64 input.';}});
+  }
+  function loadStyles(){if(document.querySelector('link[data-web404-hash-v2]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='/hash-v2.css';l.dataset.web404HashV2='1';document.head.appendChild(l);}
+  function start(){loadStyles();build();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+})();
