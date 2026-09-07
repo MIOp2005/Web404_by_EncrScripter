@@ -8,17 +8,14 @@
       if (r.ok) findings = (await r.json()).findings || [];
     } catch {}
 
-    const headerResult = $('headerResult');
-    const headerScoreNode = headerResult?.querySelector('.score');
-    const headerScore = headerScoreNode ? Number.parseInt(headerScoreNode.textContent, 10) : NaN;
-    const emailText = $('emailResult')?.textContent || '';
+    const metadataResult = $('metadataResult');
+    const metadataText = metadataResult?.textContent || '';
     const domainText = $('dnsResult')?.textContent || '';
 
     return {
       findings,
       observations: {
-        headers: Number.isFinite(headerScore) ? { score: headerScore } : null,
-        email: emailText.includes('BREACH') ? { breached: true } : emailText.includes('NO KNOWN BREACHES') ? { breached: false } : null,
+        metadata: metadataText.includes('Embedded metadata') && !metadataText.includes('No supported embedded EXIF fields detected') ? { embedded: true } : null,
         domain: domainText.includes('DNSSEC') ? { dnssec: /DNSSEC\s+Not detected/i.test(domainText) } : null
       }
     };
