@@ -19,10 +19,6 @@
 
 Web404's Email Breach module follows the HIBP v3 API model: the API key remains server-side, requests use a descriptive User-Agent, a missing account is treated as a clean lookup, and provider errors/rate limits are surfaced safely. The project does **not** copy or execute the PowerShell module from `originaluko/haveibeenpwned`; it uses the public API directly from the Web404 backend.
 
-The referenced PowerShell project documents that HIBP v3 account lookups require an API key and User-Agent and that its password lookup is a separate capability. fileciteturn215file0 fileciteturn218file0
-
-The reference project is MIT licensed. Its license requires preservation of the copyright/license notice when distributing copies or substantial portions of its software. Web404 does not vendor its source code. fileciteturn220file0
-
 ### Configure HIBP
 
 Create a server-side `.env` file from `.env.example` and set:
@@ -32,6 +28,31 @@ HIBP_API_KEY=your_key_here
 ```
 
 Never commit `.env` or paste API keys into source code, frontend JavaScript, GitHub issues, or chat.
+
+## AI Cyber Assistant
+
+The AI assistant runs through the Web404 backend so the Gemini API key is never exposed to the browser.
+
+1. Copy `.env.example` to `.env`.
+2. Add your Google Gemini API key:
+
+```env
+GEMINI_API_KEY=your_gemini_key_here
+GEMINI_MODEL=gemini-3.8-flash
+```
+
+3. Install dependencies and start Web404:
+
+```bash
+npm install
+npm start
+```
+
+4. Open `http://localhost:3000`, go to **AI Assistant**, and send a message.
+
+The server exposes `/api/health`, which reports whether the Gemini integration is configured. If the UI shows AI as offline, check that `GEMINI_API_KEY` is present in the server environment and restart the server.
+
+The Gemini integration uses Google's Interactions API with server-side requests and the `gemini-3.8-flash` model by default.
 
 ## Run locally
 
