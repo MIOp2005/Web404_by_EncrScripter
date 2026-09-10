@@ -23,6 +23,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.static('public', { dotfiles: 'deny' }));
+app.use('/vendor/exifreader', express.static('node_modules/exifreader/dist', { dotfiles: 'deny' }));
 app.use('/api', (req, res, next) => {
   const now = Date.now(); const key = req.ip || req.socket.remoteAddress || 'unknown'; const bucket = buckets.get(key) || { start: now, count: 0 };
   if (now - bucket.start >= WINDOW) { bucket.start = now; bucket.count = 0; } bucket.count += 1; buckets.set(key, bucket);
@@ -80,47 +81,6 @@ app.post('/api/risk',(req,res)=>{
   res.json({score:total,rating:riskRating(total),breakdown,recommendations});
 });
 
-const AI_SYSTEM = `You are Web404 AI, a defensive cybersecurity analyst inside an authorized security toolkit. Help users understand security findings, logs, DNS, HTTP headers, hashes, IP intelligence, incident-response concepts, secure coding, threat modeling, and remediation. Keep guidance lawful, defensive, and authorization-aware. Do not provide instructions for credential theft, malware deployment, persistence, evasion, destructive actions, unauthorized access, or exposing private personal data. For potentially dual-use requests, provide safe high-level explanation, detection, validation in a lab, or remediation instead. Be concise and practical. Never claim to have scanned a target or accessed data unless the Web404 application actually supplied that data.`;
+app.post('/api/ai', async (req,res)=>{if(!GEMINI_API_KEY)return res.status(503).json({error:'Gemini is not configured. Add GEMINI_API_KEY to the server environment.'});const input=String(req.body?.input||'').trim();if(!input)return res.status(400).json({error:'Ask a question first.'});const context=typeof req.body?.context==='object'?req.body.context:{};const system_instruction='You are Web404 AI, a defensive cybersecurity assistant. Analyze only authorized, defensive security investigations. Do not provide credential theft, malware deployment, persistence, evasion, destructive actions, unauthorized access, or private personal-data exposure. Explain findings clearly and prioritize safe remediation.';try{const response=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':GEMINI_API_KEY},body:JSON.stringify({model:GEMINI_MODEL,input,system_instruction,store:false,context}),signal:AbortSignal.timeout(30000)});const data=await response.json().catch(()=>({}));if(!response.ok)return res.status(502).json({error:data?.error?.message||'Gemini request failed.'});let text=data?.output_text||'';if(!text&&Array.isArray(data?.steps)){for(const step of data.steps){for(const item of (Array.isArray(step?.content)?step.content:[])){if(item?.text)text+=String(item.text);}}}if(!text&&Array.isArray(data?.outputs)){for(const item of data.outputs){if(item?.text)text+=String(item.text)}}if(!text)text='Gemini returned no text response.';res.json({text});}catch{res.status(502).json({error:'Could not reach Gemini.'});}});
 
-function extractGeminiText(data) {
-  if (typeof data?.output_text === 'string' && data.output_text.trim()) return data.output_text.trim();
-  const parts = [];
-  for (const step of Array.isArray(data?.steps) ? data.steps : []) {
-    for (const item of Array.isArray(step?.content) ? step.content : []) {
-      if (item?.type === 'text' && typeof item.text === 'string' && item.text.trim()) parts.push(item.text.trim());
-    }
-  }
-  return parts.join('\n\n').trim();
-}
-
-app.post('/api/ai', async (req,res)=>{
-  if(!GEMINI_API_KEY)return res.status(503).json({error:'AI Assistant is not configured. Add GEMINI_API_KEY to the server environment.'});
-  const message=String(req.body?.message||'').trim();
-  if(!message)return res.status(400).json({error:'Enter a message.'});
-  if(message.length>8000)return res.status(400).json({error:'Message is too long. Keep it under 8,000 characters.'});
-  try{
-    const response=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
-      method:'POST',
-      headers:{'content-type':'application/json','x-goog-api-key':GEMINI_API_KEY,'api-revision':'2026-05-20'},
-      body:JSON.stringify({model:GEMINI_MODEL,input:message,system_instruction:AI_SYSTEM,store:false}),
-      signal:AbortSignal.timeout(30000)
-    });
-    const raw=await response.text();
-    let data=null;
-    try{data=raw?JSON.parse(raw):null;}catch{}
-    if(response.status===401||response.status===403)return res.status(502).json({error:'Gemini rejected the configured API key.'});
-    if(response.status===429)return res.status(429).json({error:'Gemini rate limit reached. Try again shortly.'});
-    if(!response.ok){
-      const providerMessage=data?.error?.message||data?.message||'';
-      return res.status(502).json({error:providerMessage?`Gemini error: ${providerMessage}`:'Gemini AI service is temporarily unavailable.'});
-    }
-    const output=extractGeminiText(data);
-    if(!output)return res.status(502).json({error:'Gemini returned a response without text content.'});
-    res.json({reply:output,model:data?.model||GEMINI_MODEL});
-  }catch(error){
-    const detail=error?.name==='TimeoutError'?'Gemini request timed out.':error?.cause?.code==='ENOTFOUND'?'Could not resolve the Gemini API host.':'Could not reach the Gemini AI service.';
-    res.status(502).json({error:detail});
-  }
-});
-
-app.listen(PORT,()=>console.log(`Web404 running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Web404 running on http://localhost:${PORT}`));
