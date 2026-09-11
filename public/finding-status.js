@@ -72,29 +72,56 @@
   }
 
   function setRiskRow(barId,valueId,value){
-    const n=Math.max(0,Number(value)||0);const bar=$(barId),val=$(valueId);if(bar)bar.style.width=`${Math.min(100,n*2)}%`;if(val)val.textContent=String(n);
+    const n=Math.max(0,Number(value)||0),bar=$(barId),val=$(valueId);
+    if(bar)bar.style.width=`${Math.min(100,n*2)}%`;
+    if(val)val.textContent=String(n);
+  }
+
+  function metadataImpact(){
+    const data=window.web404Metadata;
+    if(!data||typeof data!=='object')return 0;
+    const sensitive=/^(gps|latitude|longitude|location|author|artist|creator|owner|serial|camera|make|model|copyright|software)/i;
+    const count=Object.keys(data).filter(k=>sensitive.test(k)).length;
+    return Math.min(10,count*2);
   }
 
   async function renderRiskBreakdown(){
     const panel=$('riskBreakdownPanel');if(!panel)return;
     try{
-      const r=await fetch('/api/risk',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({findings,observations:{}})});
+      const observations={
+        headers:window.web404UrlObservations?.headers||null,
+        domain:window.web404UrlObservations?.domain||window.web404DomainIntel||null,
+        metadata:window.web404Metadata||null
+      };
+      const r=await fetch('/api/risk',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({findings,observations})});
       if(!r.ok)throw new Error();
-      const risk=await r.json();const b=risk.breakdown||{};
-      const score=$( 'riskBreakdownScore');if(score)score.textContent=`${Number(risk.score)||0}/100 · ${risk.rating||'INFO'}`;
+      const risk=await r.json();
+      const b=risk.breakdown||{};
+      const metadata=metadataImpact();
+      const baseScore=Number(risk.score)||0;
+      const finalScore=Math.min(100,baseScore+metadata);
+      const rating=finalScore>=80?'CRITICAL':finalScore>=60?'HIGH':finalScore>=40?'MEDIUM':finalScore>=20?'LOW':'INFO';
+      const score=$('riskBreakdownScore');
+      if(score)score.textContent=`${finalScore}/100 · ${rating}`;
       setRiskRow('riskFindingsBar','riskFindingsValue',b.findings||0);
       setRiskRow('riskHeaderBar','riskHeaderValue',b.header||0);
-      setRiskRow('riskMetadataBar','riskMetadataValue',0);
+      setRiskRow('riskMetadataBar','riskMetadataValue',metadata);
       setRiskRow('riskDnssecBar','riskDnssecValue',b.dnssec||0);
     }catch{
       const score=$('riskBreakdownScore');if(score)score.textContent='0/100 · INFO';
-      setRiskRow('riskFindingsBar','riskFindingsValue',0);setRiskRow('riskHeaderBar','riskHeaderValue',0);setRiskRow('riskMetadataBar','riskMetadataValue',0);setRiskRow('riskDnssecBar','riskDnssecValue',0);
+      setRiskRow('riskFindingsBar','riskFindingsValue',0);
+      setRiskRow('riskHeaderBar','riskHeaderValue',0);
+      setRiskRow('riskMetadataBar','riskMetadataValue',0);
+      setRiskRow('riskDnssecBar','riskDnssecValue',0);
     }
   }
 
   const observer=new MutationObserver(()=>renderControls());
   const start=()=>{loadStyles();const root=$('findingsResult');if(root)observer.observe(root,{childList:true,subtree:true});load();};
   document.addEventListener('web404:findings-updated',load);
+  document.addEventListener('web404:url-risk-updated',renderRiskBreakdown);
+  document.addEventListener('web404:domain-updated',renderRiskBreakdown);
+  document.addEventListener('web404:metadata-updated',renderRiskBreakdown);
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
   setInterval(load,10000);
 })();
