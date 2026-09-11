@@ -2,6 +2,7 @@
   const $ = id => document.getElementById(id);
   const allowed = ['open', 'in-progress', 'resolved'];
   const labels = { open: 'Open', 'in-progress': 'In Progress', resolved: 'Resolved' };
+  const severityWeight = { critical: 35, high: 25, medium: 15, low: 7, info: 2 };
   let findings = [], busy = false, filter = 'all';
 
   function loadStyles(){
@@ -71,57 +72,53 @@
     try{const r=await fetch(`/api/findings/${encodeURIComponent(id)}`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status})});if(!r.ok)throw new Error();await load();document.dispatchEvent(new CustomEvent('web404:findings-updated'));}catch{await load()}finally{busy=false;select.disabled=false;}
   }
 
-  function setRiskRow(barId,valueId,value){
-    const n=Math.max(0,Number(value)||0),bar=$(barId),val=$(valueId);
-    if(bar)bar.style.width=`${Math.min(100,n*2)}%`;
-    if(val)val.textContent=String(n);
+  function riskRows(){
+    const grouped=new Map();
+    findings.forEach(f=>{
+      const source=String(f.source||'Unspecified Module').trim()||'Unspecified Module';
+      const weight=severityWeight[String(f.severity||'info').toLowerCase()]||2;
+      const status=f.status||'open';
+      const statusFactor=status==='resolved'?0.1:status==='in-progress'?0.65:1;
+      const impact=weight*statusFactor;
+      const current=grouped.get(source)||{count:0,impact:0};
+      current.count+=1;current.impact+=impact;grouped.set(source,current);
+    });
+    return [...grouped.entries()].sort((a,b)=>b[1].impact-a[1].impact);
   }
 
-  function metadataImpact(){
-    const data=window.web404Metadata;
-    if(!data||typeof data!=='object')return 0;
-    const sensitive=/^(gps|latitude|longitude|location|author|artist|creator|owner|serial|camera|make|model|copyright|software)/i;
-    const count=Object.keys(data).filter(k=>sensitive.test(k)).length;
-    return Math.min(10,count*2);
-  }
-
-  async function renderRiskBreakdown(){
+  function renderRiskBreakdown(){
     const panel=$('riskBreakdownPanel');if(!panel)return;
-    try{
-      const observations={
-        headers:window.web404UrlObservations?.headers||null,
-        domain:window.web404UrlObservations?.domain||window.web404DomainIntel||null,
-        metadata:window.web404Metadata||null
-      };
-      const r=await fetch('/api/risk',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({findings,observations})});
-      if(!r.ok)throw new Error();
-      const risk=await r.json();
-      const b=risk.breakdown||{};
-      const metadata=metadataImpact();
-      const baseScore=Number(risk.score)||0;
-      const finalScore=Math.min(100,baseScore+metadata);
-      const rating=finalScore>=80?'CRITICAL':finalScore>=60?'HIGH':finalScore>=40?'MEDIUM':finalScore>=20?'LOW':'INFO';
-      const score=$('riskBreakdownScore');
-      if(score)score.textContent=`${finalScore}/100 · ${rating}`;
-      setRiskRow('riskFindingsBar','riskFindingsValue',b.findings||0);
-      setRiskRow('riskHeaderBar','riskHeaderValue',b.header||0);
-      setRiskRow('riskMetadataBar','riskMetadataValue',metadata);
-      setRiskRow('riskDnssecBar','riskDnssecValue',b.dnssec||0);
-    }catch{
-      const score=$('riskBreakdownScore');if(score)score.textContent='0/100 · INFO';
-      setRiskRow('riskFindingsBar','riskFindingsValue',0);
-      setRiskRow('riskHeaderBar','riskHeaderValue',0);
-      setRiskRow('riskMetadataBar','riskMetadataValue',0);
-      setRiskRow('riskDnssecBar','riskDnssecValue',0);
+    const score=$('riskBreakdownScore');
+    const active=findings.filter(f=>f.status!=='resolved');
+    const totalRaw=active.reduce((sum,f)=>sum+(severityWeight[String(f.severity||'info').toLowerCase()]||2)*(f.status==='in-progress'?0.65:1),0);
+    const finalScore=Math.min(100,Math.round(totalRaw));
+    const rating=finalScore>=80?'CRITICAL':finalScore>=60?'HIGH':finalScore>=40?'MEDIUM':finalScore>=20?'LOW':'INFO';
+    if(score)score.textContent=`${finalScore}/100 · ${rating}`;
+
+    const oldRows=panel.querySelectorAll('.risk-row');oldRows.forEach(row=>row.remove());
+    const rows=riskRows();
+    const title=panel.querySelector('.risk-breakdown-title');
+    rows.forEach(([source,data])=>{
+      const row=document.createElement('div');row.className='risk-row';
+      const label=document.createElement('span');label.textContent=source;
+      label.title='Saved findings from this module';
+      const track=document.createElement('i');const bar=document.createElement('em');
+      const impact=Math.round(data.impact);bar.style.width=`${Math.min(100,impact*2)}%`;track.appendChild(bar);
+      const value=document.createElement('b');value.textContent=String(data.count);value.title=`${data.count} saved finding${data.count===1?'':'s'}`;
+      row.append(label,track,value);panel.appendChild(row);
+    });
+
+    if(!rows.length){
+      const row=document.createElement('div');row.className='risk-row';
+      const label=document.createElement('span');label.textContent='No saved findings';
+      const track=document.createElement('i');const bar=document.createElement('em');bar.style.width='0%';track.appendChild(bar);
+      const value=document.createElement('b');value.textContent='—';row.append(label,track,value);panel.appendChild(row);
     }
   }
 
   const observer=new MutationObserver(()=>renderControls());
   const start=()=>{loadStyles();const root=$('findingsResult');if(root)observer.observe(root,{childList:true,subtree:true});load();};
   document.addEventListener('web404:findings-updated',load);
-  document.addEventListener('web404:url-risk-updated',renderRiskBreakdown);
-  document.addEventListener('web404:domain-updated',renderRiskBreakdown);
-  document.addEventListener('web404:metadata-updated',renderRiskBreakdown);
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
   setInterval(load,10000);
 })();
