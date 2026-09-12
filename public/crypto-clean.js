@@ -1,36 +1,241 @@
 (() => {
   'use strict';
-  const $=id=>document.getElementById(id), enc=new TextEncoder(), dec=new TextDecoder();
-  const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
-  async function digest(algo,data){return hex(await crypto.subtle.digest(algo,data))}
-  async function textHash(algo,text){return digest(algo,enc.encode(text))}
-  const b64=b=>{let s='';b=new Uint8Array(b);for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode(...b.subarray(i,i+0x8000));return btoa(s)};
-  const unb64=s=>{const x=atob(s.trim()),b=new Uint8Array(x.length);for(let i=0;i<x.length;i++)b[i]=x.charCodeAt(i);return b};
-  const hexBytes=s=>{const clean=s.replace(/\s+/g,'');if(!/^(?:[0-9a-f]{2})+$/i.test(clean))throw Error('Invalid hexadecimal data');const b=new Uint8Array(clean.length/2);for(let i=0;i<b.length;i++)b[i]=parseInt(clean.slice(i*2,i*2+2),16);return b};
-  async function key(password,salt){const k=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'},k,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
-  async function aesEnc(data,p){const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),k=await key(p,salt),c=await crypto.subtle.encrypt({name:'AES-GCM',iv},k,data);return `W404-AES1.${b64(salt)}.${b64(iv)}.${b64(c)}`}
-  async function aesDec(pkg,p){const a=pkg.trim().split('.');if(a.length!==4||a[0]!=='W404-AES1')throw Error('Invalid W404 AES ciphertext');const k=await key(p,unb64(a[1]));return new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(a[2])},k,unb64(a[3])))}
-  const download=(blob,name)=>{const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
-  function output(t){const o=$('co');if(o)o.innerHTML=t}
-  function render(t){const b=$('cryptoCleanBody');if(!b)return;
-    const views={
-      hash:'<label class="crypto-label">Text</label><textarea id="ct" rows="7" placeholder="Enter text to hash"></textarea><div class="crypto-checks"><label><input id="h256" type="checkbox" checked> SHA-256</label><label><input id="h1" type="checkbox"> SHA-1</label><label><input id="h512" type="checkbox"> SHA-512</label></div><button class="crypto-main" id="goHash">Generate hashes →</button><div id="co" class="crypto-output">Hash output will appear here.</div><p class="crypto-help">Hashes are one-way integrity fingerprints. They are not decryptable.</p>',
-      file:'<label class="crypto-label">File</label><input id="cf" type="file"><div class="crypto-actions"><button class="crypto-main" id="fh">Hash file</button><button class="crypto-secondary" id="fe">Encode file → Base64</button></div><div id="co" class="crypto-output">Select a file. Processing stays in your browser.</div>',
-      verify:'<label class="crypto-label">File</label><input id="vf" type="file"><label class="crypto-label">Expected SHA-256</label><input id="ce" placeholder="Paste trusted SHA-256 checksum"><button class="crypto-main" id="goVerify">Verify file integrity →</button><div id="co" class="crypto-output">Choose a file and provide its trusted checksum.</div>',
-      encoding:'<label class="crypto-label">Input</label><textarea id="eb" rows="7" placeholder="Text, Base64, hexadecimal or URL-encoded data"></textarea><label class="crypto-label">Format</label><select id="ef" class="crypto-select"><option value="base64">Base64</option><option value="hex">Hexadecimal</option><option value="url">URL encoding</option></select><div class="crypto-actions"><button class="crypto-main" id="ee">Encode</button><button class="crypto-secondary" id="ed">Decode</button></div><div id="co" class="crypto-output">Choose a format and operation.</div>',
-      password:'<div class="crypto-mode"><button class="crypto-tool active" id="pe">Protect</button><button class="crypto-tool" id="pd">Unprotect</button></div><label class="crypto-label">Data</label><textarea id="px" rows="7" placeholder="Text to protect"></textarea><label class="crypto-label">Password</label><input id="pp" type="password" placeholder="At least 12 characters"><button class="crypto-main" id="pr">Protect →</button><div id="co" class="crypto-output">AES-256-GCM output will appear here.</div><p class="crypto-help">Password protection uses AES-256-GCM with a random salt and IV. The password never leaves this browser.</p>',
-      identify:'<label class="crypto-label">Value</label><textarea id="ix" rows="7" placeholder="Paste a hash, encoded value, JWT, ciphertext or token"></textarea><button class="crypto-main" id="idgo">Identify format →</button><div id="co" class="crypto-output">Identification is heuristic; a format match is not proof of origin.</div>'
-    }; b.innerHTML=views[t]||views.hash; bind(t)
+
+  const $ = id => document.getElementById(id);
+  const enc = new TextEncoder();
+  const dec = new TextDecoder();
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
   }
-  function bind(t){
-    if(t==='hash')$('goHash').onclick=async()=>{const x=$('ct').value;if(!x){output('Enter text first.');return}output('Calculating…');let s='';if($('h1').checked)s+=`<div class="crypto-result-row"><b>SHA-1</b><code>${await textHash('SHA-1',x)}</code></div>`;if($('h256').checked)s+=`<div class="crypto-result-row"><b>SHA-256</b><code>${await textHash('SHA-256',x)}</code></div>`;if($('h512').checked)s+=`<div class="crypto-result-row"><b>SHA-512</b><code>${await textHash('SHA-512',x)}</code></div>`;output(s||'Select at least one hash algorithm.')};
-    if(t==='file'){$('fh').onclick=async()=>{const f=$('cf').files[0];if(!f){output('Select a file first.');return}output('Hashing locally…');const d=await f.arrayBuffer();output(`<b>${esc(f.name)}</b><br>${f.size.toLocaleString()} bytes<div class="crypto-result-row"><b>SHA-256</b><code>${await digest('SHA-256',d)}</code></div><div class="crypto-result-row"><b>SHA-512</b><code>${await digest('SHA-512',d)}</code></div>`)};$('fe').onclick=async()=>{const f=$('cf').files[0];if(!f){output('Select a file first.');return}output('Encoding locally…');const text=b64(await f.arrayBuffer());output(`<b>Base64 encoded file</b><div class="crypto-output-inner"><textarea id="fileB64" rows="10" readonly>${esc(text)}</textarea></div><button class="crypto-secondary" id="copyFileB64">Copy Base64</button>`);$('copyFileB64').onclick=()=>navigator.clipboard?.writeText(text)} }
-    if(t==='verify')$('goVerify').onclick=async()=>{const f=$('vf').files[0],e=$('ce').value.trim().toLowerCase();if(!f||!e){output('Choose a file and enter the expected SHA-256.');return}output('Calculating…');const a=await digest('SHA-256',await f.arrayBuffer());const ok=a===e;const o=$('co');o.className='crypto-output '+(ok?'success':'danger');o.innerHTML=ok?`<b>MATCH</b><br>SHA-256: <code>${a}</code><br>File integrity verified against the supplied checksum.`:`<b>NO MATCH</b><br>Calculated: <code>${a}</code><br>The supplied checksum differs from the file.`};
-    if(t==='encoding'){$('ee').onclick=()=>{try{const x=$('eb').value,f=$('ef').value;output(f==='base64'?b64(enc.encode(x)):f==='hex'?hex(enc.encode(x)):encodeURIComponent(x))}catch(e){output(esc(e.message))}};$('ed').onclick=()=>{try{const x=$('eb').value,f=$('ef').value;output(f==='base64'?dec.decode(unb64(x)):f==='hex'?dec.decode(hexBytes(x)):decodeURIComponent(x))}catch{output('Invalid input for the selected format.')}}
-    if(t==='password'){let d=false;$('pe').onclick=()=>{d=false;$('pe').classList.add('active');$('pd').classList.remove('active');$('pr').textContent='Protect →';$('px').placeholder='Text to protect'};$('pd').onclick=()=>{d=true;$('pd').classList.add('active');$('pe').classList.remove('active');$('pr').textContent='Unprotect →';$('px').placeholder='Paste W404-AES1 ciphertext'};$('pr').onclick=async()=>{const x=$('px').value,p=$('pp').value;if(!x){output('Enter data.');return}if(p.length<12){output('Password must be at least 12 characters.');return}output('Processing locally…');try{if(d){output(esc(dec.decode(await aesDec(x,p))))}else output(esc(await aesEnc(enc.encode(x),p)))}catch{output('Operation failed. Check the password and W404-AES1 ciphertext.')}}}
-    if(t==='identify')$('idgo').onclick=()=>{const x=$('ix').value.trim();if(!x){output('Enter a value first.');return}const tests=[];if(/^W404-AES1\.[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=]+$/.test(x))tests.push(['W404-AES1','Web404 AES-256-GCM password-protected ciphertext']);if(/^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(x))tests.push(['JWT','JSON Web Token structure']);if(/^[a-f0-9]{32}$/i.test(x))tests.push(['32 hex chars','Could be MD5 or another 128-bit hexadecimal digest']);if(/^[a-f0-9]{40}$/i.test(x))tests.push(['40 hex chars','Could be SHA-1 or another 160-bit hexadecimal digest']);if(/^[a-f0-9]{64}$/i.test(x))tests.push(['64 hex chars','Could be SHA-256 or another 256-bit hexadecimal digest']);if(/^[a-f0-9]{128}$/i.test(x))tests.push(['128 hex chars','Could be SHA-512 or another 512-bit hexadecimal digest']);if(/^[A-Za-z0-9+/]+={0,2}$/.test(x)&&x.length%4===0)tests.push(['Base64 candidate','Valid-looking Base64 syntax']);if(/%[0-9A-F]{2}/i.test(x))tests.push(['URL encoding','Contains percent-encoded bytes']);output(tests.length?tests.map(([a,b])=>`<div class="crypto-result-row"><b>${esc(a)}</b><span>${esc(b)}</span></div>`).join(''):'<b>Unknown</b><br>No supported format matched the supplied value.');}
+
+  function bytesToHex(buffer) {
+    return Array.from(new Uint8Array(buffer), x => x.toString(16).padStart(2, '0')).join('');
   }
-  function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-  function init(){document.querySelectorAll('[data-ctool]').forEach(x=>x.onclick=()=>{document.querySelectorAll('[data-ctool]').forEach(y=>y.classList.toggle('active',x===y));render(x.dataset.ctool)});render('hash')}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+
+  function bytesToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let out = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) out += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(out);
+  }
+
+  function base64ToBytes(value) {
+    const raw = atob(value.trim());
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    return bytes;
+  }
+
+  async function digest(algorithm, data) {
+    return bytesToHex(await crypto.subtle.digest(algorithm, data));
+  }
+
+  async function deriveKey(password, salt) {
+    const material = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' },
+      material,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    );
+  }
+
+  async function protectText(text, password) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveKey(password, salt);
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(text));
+    return 'W404-AES1.' + bytesToBase64(salt) + '.' + bytesToBase64(iv) + '.' + bytesToBase64(ciphertext);
+  }
+
+  async function unprotectText(packageText, password) {
+    const parts = packageText.trim().split('.');
+    if (parts.length !== 4 || parts[0] !== 'W404-AES1') throw new Error('Invalid W404-AES1 ciphertext');
+    const key = await deriveKey(password, base64ToBytes(parts[1]));
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: base64ToBytes(parts[2]) }, key, base64ToBytes(parts[3]));
+    return dec.decode(plain);
+  }
+
+  function setOutput(html, className) {
+    const out = $('co');
+    if (!out) return;
+    out.className = 'crypto-output' + (className ? ' ' + className : '');
+    out.innerHTML = html;
+  }
+
+  function render(tool) {
+    const body = $('cryptoCleanBody');
+    if (!body) return;
+
+    if (tool === 'hash') {
+      body.innerHTML = '<label class="crypto-label">Text</label>' +
+        '<textarea id="ct" rows="7" placeholder="Enter text to hash"></textarea>' +
+        '<div class="crypto-checks"><label><input id="h256" type="checkbox" checked> SHA-256</label><label><input id="h1" type="checkbox"> SHA-1</label><label><input id="h512" type="checkbox"> SHA-512</label></div>' +
+        '<button class="crypto-main" id="goHash">Generate hashes →</button>' +
+        '<div id="co" class="crypto-output">Hash output will appear here.</div>' +
+        '<p class="crypto-help">A hash is a one-way fingerprint. It cannot be decrypted back into the original text.</p>';
+      $('goHash').onclick = async () => {
+        const text = $('ct').value;
+        if (!text) return setOutput('Enter text first.');
+        setOutput('Calculating…');
+        let html = '';
+        if ($('h1').checked) html += '<div class="crypto-result-row"><b>SHA-1</b><code>' + await digest('SHA-1', enc.encode(text)) + '</code></div>';
+        if ($('h256').checked) html += '<div class="crypto-result-row"><b>SHA-256</b><code>' + await digest('SHA-256', enc.encode(text)) + '</code></div>';
+        if ($('h512').checked) html += '<div class="crypto-result-row"><b>SHA-512</b><code>' + await digest('SHA-512', enc.encode(text)) + '</code></div>';
+        setOutput(html || 'Select at least one algorithm.');
+      };
+      return;
+    }
+
+    if (tool === 'file') {
+      body.innerHTML = '<label class="crypto-label">File</label><input id="cf" type="file">' +
+        '<div class="crypto-actions"><button class="crypto-main" id="fh">Hash file</button><button class="crypto-secondary" id="fe">Encode file → Base64</button></div>' +
+        '<div id="co" class="crypto-output">Select a file. Processing stays in your browser.</div>';
+      $('fh').onclick = async () => {
+        const file = $('cf').files[0];
+        if (!file) return setOutput('Select a file first.');
+        setOutput('Hashing locally…');
+        const data = await file.arrayBuffer();
+        setOutput('<b>' + escapeHtml(file.name) + '</b><br>' + file.size.toLocaleString() + ' bytes' +
+          '<div class="crypto-result-row"><b>SHA-256</b><code>' + await digest('SHA-256', data) + '</code></div>' +
+          '<div class="crypto-result-row"><b>SHA-512</b><code>' + await digest('SHA-512', data) + '</code></div>');
+      };
+      $('fe').onclick = async () => {
+        const file = $('cf').files[0];
+        if (!file) return setOutput('Select a file first.');
+        setOutput('Encoding locally…');
+        const encoded = bytesToBase64(await file.arrayBuffer());
+        setOutput('<b>Base64 encoded file</b><textarea rows="10" readonly>' + escapeHtml(encoded) + '</textarea><button class="crypto-secondary" id="copyEncoded">Copy Base64</button>');
+        $('copyEncoded').onclick = () => navigator.clipboard && navigator.clipboard.writeText(encoded);
+      };
+      return;
+    }
+
+    if (tool === 'verify') {
+      body.innerHTML = '<label class="crypto-label">File</label><input id="vf" type="file">' +
+        '<label class="crypto-label">Expected SHA-256</label><input id="ce" placeholder="Paste trusted SHA-256 checksum">' +
+        '<button class="crypto-main" id="goVerify">Verify integrity →</button>' +
+        '<div id="co" class="crypto-output">Choose a file and provide its trusted checksum.</div>';
+      $('goVerify').onclick = async () => {
+        const file = $('vf').files[0];
+        const expected = $('ce').value.trim().toLowerCase();
+        if (!file || !expected) return setOutput('Choose a file and enter the expected SHA-256.');
+        setOutput('Calculating…');
+        const actual = await digest('SHA-256', await file.arrayBuffer());
+        if (actual === expected) setOutput('<b>MATCH</b><br>SHA-256: <code>' + actual + '</code><br>File integrity verified.', 'success');
+        else setOutput('<b>NO MATCH</b><br>Calculated: <code>' + actual + '</code><br>The supplied checksum differs from the file.', 'danger');
+      };
+      return;
+    }
+
+    if (tool === 'encoding') {
+      body.innerHTML = '<label class="crypto-label">Input</label><textarea id="edInput" rows="7" placeholder="Enter text or encoded data"></textarea>' +
+        '<label class="crypto-label">Encoding</label><select id="edFormat"><option value="base64">Base64</option><option value="hex">Hexadecimal</option><option value="url">URL encoding</option></select>' +
+        '<div class="crypto-actions"><button class="crypto-main" id="encodeBtn">Encode →</button><button class="crypto-secondary" id="decodeBtn">Decode →</button></div>' +
+        '<div id="co" class="crypto-output">Choose an encoding and operation.</div>';
+      $('encodeBtn').onclick = () => {
+        const value = $('edInput').value;
+        const format = $('edFormat').value;
+        try {
+          if (format === 'base64') setOutput(bytesToBase64(enc.encode(value)));
+          else if (format === 'hex') setOutput(bytesToHex(enc.encode(value)));
+          else setOutput(encodeURIComponent(value));
+        } catch (e) { setOutput(escapeHtml(e.message)); }
+      };
+      $('decodeBtn').onclick = () => {
+        const value = $('edInput').value;
+        const format = $('edFormat').value;
+        try {
+          if (format === 'base64') setOutput(dec.decode(base64ToBytes(value)));
+          else if (format === 'hex') {
+            const clean = value.replace(/\s+/g, '');
+            if (!clean || clean.length % 2 || !/^[0-9a-f]+$/i.test(clean)) throw new Error('Invalid hexadecimal input.');
+            const bytes = new Uint8Array(clean.length / 2);
+            for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+            setOutput(dec.decode(bytes));
+          } else setOutput(decodeURIComponent(value));
+        } catch { setOutput('Invalid input for the selected format.'); }
+      };
+      return;
+    }
+
+    if (tool === 'password') {
+      body.innerHTML = '<div class="crypto-mode"><button class="crypto-tool active" id="protectMode">Protect</button><button class="crypto-tool" id="unprotectMode">Unprotect</button></div>' +
+        '<label class="crypto-label">Data</label><textarea id="passwordData" rows="7" placeholder="Text to protect"></textarea>' +
+        '<label class="crypto-label">Password</label><input id="passwordValue" type="password" placeholder="At least 12 characters">' +
+        '<button class="crypto-main" id="passwordGo">Protect →</button><div id="co" class="crypto-output">AES-256-GCM output will appear here.</div>' +
+        '<p class="crypto-help">Uses AES-256-GCM with PBKDF2-SHA-256, a random salt and random IV. Processing is local.</p>';
+      let decrypt = false;
+      $('protectMode').onclick = () => { decrypt = false; $('protectMode').classList.add('active'); $('unprotectMode').classList.remove('active'); $('passwordGo').textContent = 'Protect →'; $('passwordData').placeholder = 'Text to protect'; };
+      $('unprotectMode').onclick = () => { decrypt = true; $('unprotectMode').classList.add('active'); $('protectMode').classList.remove('active'); $('passwordGo').textContent = 'Unprotect →'; $('passwordData').placeholder = 'Paste W404-AES1 ciphertext'; };
+      $('passwordGo').onclick = async () => {
+        const data = $('passwordData').value;
+        const password = $('passwordValue').value;
+        if (!data) return setOutput('Enter data.');
+        if (password.length < 12) return setOutput('Password must be at least 12 characters.');
+        setOutput('Processing locally…');
+        try {
+          if (decrypt) setOutput(escapeHtml(await unprotectText(data, password)));
+          else setOutput(escapeHtml(await protectText(data, password)));
+        } catch { setOutput('Operation failed. Check the password and W404-AES1 ciphertext.'); }
+      };
+      return;
+    }
+
+    if (tool === 'identify') {
+      body.innerHTML = '<label class="crypto-label">Value</label><textarea id="identifyInput" rows="7" placeholder="Paste a hash, encoded value, JWT, W404 ciphertext or token"></textarea>' +
+        '<button class="crypto-main" id="identifyBtn">Identify →</button><div id="co" class="crypto-output">Identification is heuristic, not proof of origin.</div>';
+      $('identifyBtn').onclick = () => {
+        const value = $('identifyInput').value.trim();
+        if (!value) return setOutput('Enter a value first.');
+        const matches = [];
+        if (/^W404-AES1\.[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=]+$/.test(value)) matches.push(['W404-AES1', 'Web404 AES-256-GCM password-protected ciphertext']);
+        if (/^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value)) matches.push(['JWT', 'JSON Web Token structure']);
+        if (/^[a-f0-9]{32}$/i.test(value)) matches.push(['32 hex characters', 'Could be MD5 or another 128-bit hexadecimal digest']);
+        if (/^[a-f0-9]{40}$/i.test(value)) matches.push(['40 hex characters', 'Could be SHA-1 or another 160-bit hexadecimal digest']);
+        if (/^[a-f0-9]{64}$/i.test(value)) matches.push(['64 hex characters', 'Could be SHA-256 or another 256-bit hexadecimal digest']);
+        if (/^[a-f0-9]{128}$/i.test(value)) matches.push(['128 hex characters', 'Could be SHA-512 or another 512-bit hexadecimal digest']);
+        if (/^[A-Za-z0-9+/]+={0,2}$/.test(value) && value.length % 4 === 0) matches.push(['Base64 candidate', 'Valid-looking Base64 syntax']);
+        if (/%[0-9A-F]{2}/i.test(value)) matches.push(['URL encoding', 'Contains percent-encoded bytes']);
+        setOutput(matches.length ? matches.map(x => '<div class="crypto-result-row"><b>' + escapeHtml(x[0]) + '</b><span>' + escapeHtml(x[1]) + '</span></div>').join('') : '<b>Unknown</b><br>No supported format matched the supplied value.');
+      };
+    }
+  }
+
+  function setupTabs() {
+    const container = document.querySelector('.crypto-tools');
+    if (!container) return;
+    container.innerHTML = '';
+    const tabs = [
+      ['hash', 'Text Hash'],
+      ['file', 'File Hash / Encode'],
+      ['verify', 'Verify Integrity'],
+      ['encoding', 'Encoding / Decoding'],
+      ['password', 'Password Protect'],
+      ['identify', 'Identify Hash / Encryption']
+    ];
+    tabs.forEach(([id, label], index) => {
+      const button = document.createElement('button');
+      button.className = 'crypto-tool' + (index === 0 ? ' active' : '');
+      button.dataset.cryptoTool = id;
+      button.textContent = label;
+      button.addEventListener('click', () => {
+        container.querySelectorAll('.crypto-tool').forEach(x => x.classList.toggle('active', x === button));
+        render(id);
+      });
+      container.appendChild(button);
+    });
+    render('hash');
+  }
+
+  function init() {
+    if ($('cryptoCleanBody')) setupTabs();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
+  else init();
 })();
