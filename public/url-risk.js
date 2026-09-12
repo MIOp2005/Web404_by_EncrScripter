@@ -2,7 +2,6 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
   const ipLoggerHosts = new Set(['grabify.link','grabify.icu','iplogger.org','iplogger.com','iplogger.co','2no.co','yip.su','iplog.co','ps3cfw.com','blasze.com','spoty.link','iplis.ru']);
   const shortenerHosts = new Set(['bit.ly','tinyurl.com','t.co','is.gd','ow.ly','cutt.ly','rb.gy','shorturl.at','rebrand.ly']);
   const suspiciousWords = /(?:login|signin|verify|verification|secure|account|update|password|wallet|crypto|gift|bonus|claim|invoice|payment|recover|unlock|confirm|security-check|session-expired)/i;
@@ -10,6 +9,7 @@
   const redirectParams = /^(?:url|uri|u|target|dest|destination|redirect|redirect_url|next|continue|return|returnurl|link|goto)$/i;
   const trackingParams = /^(?:url|ip|ipaddr|ip_address|ref|referrer|track|tracker|click|cid|sid)$/i;
   function hostMatches(host, set) { return set.has(host) || [...set].some(x => host.endsWith('.' + x)); }
+  function privateHosts(host) { return /^(localhost|.*\.localhost|.*\.local|0\.0\.0\.0|127(?:\.\d{1,3}){3})$/i.test(host); }
   function assess(target, domain, headers) {
     const reasons = []; let score = 0; let highSignal = false; const host = target.hostname.toLowerCase(); const text = target.href; const pathQuery = target.pathname + target.search; const isIp = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(host) || host.includes(':'); const params = [...target.searchParams.keys()];
     if (hostMatches(host, ipLoggerHosts)) { score += 90; highSignal = true; reasons.push('Hostname matches a known IP-logging/tracking service pattern.'); }
@@ -39,23 +39,34 @@
     else if (score >= 35) { verdict = 'SUSPICIOUS'; cls = 'medium'; summary = 'Several suspicious indicators were detected. Verify the destination before opening it.'; }
     return { score, verdict, cls, summary, reasons, highSignal };
   }
-  function privateHosts(host) { return /^(localhost|.*\.localhost|.*\.local|0\.0\.0\.0|127(?:\.\d{1,3}){3})$/i.test(host); }
-  async function analyze() {
+  function row(label, value) { return `<div class="url-detail-row"><b>${esc(label)}</b><span>${esc(value)}</span></div>`; }
+  function analyze() {
     const input = $('urlIntelInput'), output = $('urlIntelResult'); if (!input || !output) return; const raw = input.value.trim();
     if (!raw) { output.innerHTML = '<div class="empty">Enter a URL first.</div>'; return; }
     let target; try { target = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`); } catch { output.innerHTML = '<div class="empty">Enter a valid HTTP(S) URL.</div>'; return; }
     if (!['http:', 'https:'].includes(target.protocol)) { output.innerHTML = '<div class="empty">Only HTTP(S) URLs are supported.</div>'; return; }
     output.innerHTML = '<div class="empty"><span class="spinner"></span> Running URL risk assessment…</div>';
-    let domain = null, headers = null;
-    try { const r = await fetch('/api/domain', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({domain:target.hostname}) }); if (r.ok) domain = await r.json(); } catch {}
-    try { const r = await fetch('/api/headers', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({url:target.href}) }); if (r.ok) headers = await r.json(); } catch {}
-    const risk = assess(target, domain, headers);
-    window.web404UrlRisk = { analyzed: true, url: target.href, hostname: target.hostname, score: risk.score, headers: headers ? { score: Number(headers.score), status: Number(headers.status) } : null };
-    window.web404UrlObservations = { headers, domain };
-    document.dispatchEvent(new CustomEvent('web404:url-risk-updated'));
-    const reasons = risk.reasons.length ? `<ul>${risk.reasons.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : '<p>No notable heuristic indicators.</p>';
-    const confidence = risk.highSignal || risk.score >= 70 ? 'High' : risk.score >= 35 ? 'Moderate' : 'Limited';
-    output.className = 'result'; output.innerHTML = `<div class="url-risk ${risk.cls}"><div class="url-risk-top"><div><small>URL RISK VERDICT</small><strong>${risk.verdict}</strong><p>${esc(risk.summary)}</p></div><div class="risk-score"><b>${risk.score}</b><span>/ 100</span></div></div><div class="risk-meter"><span style="width:${risk.score}%"></span></div><div class="url-risk-grid"><div class="stat"><small>HOST</small><b>${esc(target.hostname)}</b></div><div class="stat"><small>PROTOCOL</small><b>${esc(target.protocol.replace(':','').toUpperCase())}</b></div><div class="stat"><small>DETECTION CONFIDENCE</small><b>${confidence}</b></div><div class="stat"><small>HTTP SIGNAL</small><b>${headers?.score != null ? `${esc(headers.score)}/100` : 'Unavailable'}</b></div></div><div class="risk-reasons"><h3>Why this verdict?</h3>${reasons}</div><div class="risk-disclaimer"><b>Important:</b> This is a defensive URL-risk engine, not a guaranteed malware/reputation verdict. Known IP-loggers and other high-signal tracking infrastructure are flagged strongly, but a normal-looking URL can still be malicious. Do not enter credentials or download files based on this score alone.</div></div>`;
+    Promise.allSettled([
+      fetch('/api/domain', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({domain:target.hostname})}).then(r=>r.ok?r.json():null),
+      fetch('/api/headers', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:target.href})}).then(r=>r.ok?r.json():null)
+    ]).then(results => {
+      const domain = results[0].status === 'fulfilled' ? results[0].value : null;
+      const headers = results[1].status === 'fulfilled' ? results[1].value : null;
+      const risk = assess(target, domain, headers);
+      const params = [...target.searchParams.entries()];
+      const pathSegments = target.pathname.split('/').filter(Boolean);
+      const headerEntries = headers?.headers && typeof headers.headers === 'object' ? Object.entries(headers.headers) : [];
+      const confidence = risk.highSignal || risk.score >= 70 ? 'High' : risk.score >= 35 ? 'Moderate' : 'Limited';
+      const reasons = risk.reasons.length ? `<ul>${risk.reasons.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : '<p>No notable heuristic indicators.</p>';
+      const queryHtml = params.length ? params.map(([k,v]) => row(k, v || '(empty)')).join('') : '<div class="url-muted">No query parameters.</div>';
+      const headersHtml = headerEntries.length ? headerEntries.map(([k,v]) => row(k, Array.isArray(v) ? v.join(', ') : v)).join('') : '<div class="url-muted">HTTP response headers unavailable.</div>';
+      const encodedCount = (target.href.match(/%[0-9a-f]{2}/gi)||[]).length;
+      window.web404UrlRisk = { analyzed: true, url: target.href, hostname: target.hostname, score: risk.score, headers: headers ? {score:Number(headers.score),status:Number(headers.status)} : null };
+      window.web404UrlObservations = { headers, domain };
+      document.dispatchEvent(new CustomEvent('web404:url-risk-updated'));
+      output.className = 'result';
+      output.innerHTML = `<div class="url-risk ${risk.cls}"><div class="url-risk-top"><div><small>URL RISK VERDICT</small><strong>${risk.verdict}</strong><p>${esc(risk.summary)}</p></div><div class="risk-score"><b>${risk.score}</b><span>/ 100</span></div></div><div class="risk-meter"><span style="width:${risk.score}%"></span></div><div class="url-risk-grid"><div class="stat"><small>HOST</small><b>${esc(target.hostname)}</b></div><div class="stat"><small>PROTOCOL</small><b>${esc(target.protocol.replace(':','').toUpperCase())}</b></div><div class="stat"><small>DETECTION CONFIDENCE</small><b>${confidence}</b></div><div class="stat"><small>HTTP SIGNAL</small><b>${headers?.score != null ? `${esc(headers.score)}/100` : 'Unavailable'}</b></div></div><div class="url-detail-section"><h3>URL Anatomy</h3><div class="url-detail-grid">${row('FULL URL',target.href)}${row('ORIGIN',target.origin)}${row('HOSTNAME',target.hostname)}${row('PORT',target.port||'Default')} ${row('PATH',target.pathname||'/')}${row('PATH SEGMENTS',String(pathSegments.length))}${row('QUERY STRING',target.search||'None')}${row('QUERY PARAMETERS',String(params.length))}${row('FRAGMENT',target.hash||'None')}${row('URL LENGTH',`${target.href.length} characters`)}${row('ENCODED TOKENS',String(encodedCount))}${row('USERNAME',target.username||'None')}</div></div><div class="url-detail-section"><h3>Query Parameters</h3><div class="url-detail-list">${queryHtml}</div></div><div class="url-detail-section"><h3>HTTP Security Signals</h3><div class="url-detail-grid">${row('STATUS',headers?.status ?? 'Unavailable')}${row('HEADER SCORE',headers?.score != null ? `${headers.score}/100` : 'Unavailable')}</div><div class="url-detail-list">${headersHtml}</div></div><div class="risk-reasons"><h3>Why this verdict?</h3>${reasons}</div><div class="risk-disclaimer"><b>Important:</b> This is a defensive URL-risk engine, not a guaranteed malware/reputation verdict. Known IP-loggers and other high-signal tracking infrastructure are flagged strongly, but a normal-looking URL can still be malicious. Do not enter credentials or download files based on this score alone.</div></div>`;
+    });
   }
   function init() { const button = $('urlIntelButton'); if (!button) return; button.textContent = 'Check URL Risk →'; button.onclick = analyze; $('urlIntelInput')?.addEventListener('keydown', e => { if (e.key === 'Enter') analyze(); }); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once:true}); else init();
