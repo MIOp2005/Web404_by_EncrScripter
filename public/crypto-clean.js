@@ -23,7 +23,11 @@
   }
 
   function base64ToBytes(value) {
-    const raw = atob(value.trim());
+    const clean = value.trim().replace(/\s+/g, '');
+    if (!clean || clean.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(clean)) {
+      throw new Error('Invalid Base64 input.');
+    }
+    const raw = atob(clean);
     const bytes = new Uint8Array(raw.length);
     for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
     return bytes;
@@ -43,6 +47,18 @@
       button.textContent = 'Copy failed';
       setTimeout(() => { button.textContent = 'Copy'; }, 1200);
     }
+  }
+
+  function downloadBytes(bytes, filename, mime) {
+    const blob = new Blob([bytes], { type: mime || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename || 'decoded-file';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   async function deriveKey(password, salt) {
@@ -110,31 +126,50 @@
     }
 
     if (tool === 'file') {
-      body.innerHTML = '<label class="crypto-label">File</label><input id="cf" type="file">' +
-        '<div class="crypto-actions"><button class="crypto-main" id="fh">Hash file</button><button class="crypto-secondary" id="fe">Encode file → Base64</button></div>' +
-        '<div id="co" class="crypto-output">Select a file. Processing stays in your browser.</div>';
-      $('fh').onclick = async () => {
-        const file = $('cf').files[0];
-        if (!file) return setOutput('Select a file first.');
-        setOutput('Hashing locally…');
-        const data = await file.arrayBuffer();
-        const sha256 = await digest('SHA-256', data);
-        const sha512 = await digest('SHA-512', data);
-        setOutput('<b>' + escapeHtml(file.name) + '</b><br>' + file.size.toLocaleString() + ' bytes' +
-          '<div class="crypto-result-row"><b>SHA-256</b><code>' + sha256 + '</code><button type="button" class="crypto-secondary crypto-copy-hash">Copy</button></div>' +
-          '<div class="crypto-result-row"><b>SHA-512</b><code>' + sha512 + '</code><button type="button" class="crypto-secondary crypto-copy-hash">Copy</button></div>');
-        const hashes = [sha256, sha512];
-        document.querySelectorAll('.crypto-copy-hash').forEach((button, index) => {
-          button.onclick = () => copyText(hashes[index], button);
-        });
-      };
+      body.innerHTML = '<div class="crypto-section"><label class="crypto-label">File → Base64</label><input id="cf" type="file">' +
+        '<button class="crypto-main" id="fe">Encode file → Base64</button>' +
+        '<div id="fileEncodeOutput" class="crypto-output">Select a file. Encoding stays in your browser.</div></div>' +
+        '<div class="crypto-section"><label class="crypto-label">Base64 → File</label>' +
+        '<textarea id="fileDecodeInput" rows="9" placeholder="Paste Base64 encoded file data"></textarea>' +
+        '<div class="crypto-grid"><div><label class="crypto-label">Output filename</label><input id="fileDecodeName" value="decoded-file.bin" placeholder="decoded-file.bin"></div>' +
+        '<div><label class="crypto-label">MIME type</label><input id="fileDecodeMime" value="application/octet-stream" placeholder="application/octet-stream"></div></div>' +
+        '<button class="crypto-main" id="fd">Decode & download file →</button>' +
+        '<div id="fileDecodeOutput" class="crypto-output">Paste Base64 data to decode it into a file.</div></div>' +
+        '<div id="co" class="crypto-output" hidden></div>';
+
       $('fe').onclick = async () => {
         const file = $('cf').files[0];
-        if (!file) return setOutput('Select a file first.');
-        setOutput('Encoding locally…');
-        const encoded = bytesToBase64(await file.arrayBuffer());
-        setOutput('<b>Base64 encoded file</b><textarea rows="10" readonly>' + escapeHtml(encoded) + '</textarea><button class="crypto-secondary" id="copyEncoded">Copy Base64</button>');
-        $('copyEncoded').onclick = () => copyText(encoded, $('copyEncoded'));
+        if (!file) {
+          $('fileEncodeOutput').textContent = 'Select a file first.';
+          return;
+        }
+        $('fileEncodeOutput').textContent = 'Encoding locally…';
+        try {
+          const encoded = bytesToBase64(await file.arrayBuffer());
+          $('fileEncodeOutput').innerHTML = '<b>' + escapeHtml(file.name) + '</b><br>' + file.size.toLocaleString() + ' bytes' +
+            '<textarea rows="10" readonly>' + escapeHtml(encoded) + '</textarea>' +
+            '<button class="crypto-secondary" id="copyEncoded">Copy Base64</button>';
+          $('copyEncoded').onclick = () => copyText(encoded, $('copyEncoded'));
+        } catch {
+          $('fileEncodeOutput').textContent = 'File encoding failed.';
+        }
+      };
+
+      $('fd').onclick = () => {
+        const value = $('fileDecodeInput').value;
+        const filename = $('fileDecodeName').value.trim() || 'decoded-file.bin';
+        const mime = $('fileDecodeMime').value.trim() || 'application/octet-stream';
+        if (!value.trim()) {
+          $('fileDecodeOutput').textContent = 'Paste Base64 data first.';
+          return;
+        }
+        try {
+          const bytes = base64ToBytes(value);
+          downloadBytes(bytes, filename, mime);
+          $('fileDecodeOutput').innerHTML = '<b>Decoded successfully.</b><br>' + bytes.byteLength.toLocaleString() + ' bytes prepared as <code>' + escapeHtml(filename) + '</code>.';
+        } catch {
+          $('fileDecodeOutput').textContent = 'Invalid Base64 file data.';
+        }
       };
       return;
     }
@@ -236,7 +271,7 @@
     container.innerHTML = '';
     const tabs = [
       ['hash', 'Text Hash'],
-      ['file', 'File Hash / Encode'],
+      ['file', 'File Encode / Decode'],
       ['verify', 'Verify Integrity'],
       ['encoding', 'Encoding / Decoding'],
       ['password', 'Password Protect'],
@@ -256,10 +291,6 @@
     render('hash');
   }
 
-  function init() {
-    if ($('cryptoCleanBody')) setupTabs();
-  }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
-  else init();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupTabs);
+  else setupTabs();
 })();
