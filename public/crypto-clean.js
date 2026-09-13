@@ -6,8 +6,8 @@
   const dec = new TextDecoder();
 
   function escapeHtml(value) {
-    return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
-      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    return String(value == null ? '' : value).replace(/[&<>\"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'
     }[c]));
   }
 
@@ -31,6 +31,18 @@
 
   async function digest(algorithm, data) {
     return bytesToHex(await crypto.subtle.digest(algorithm, data));
+  }
+
+  async function copyText(value, button) {
+    try {
+      await navigator.clipboard.writeText(value);
+      const original = button.textContent;
+      button.textContent = 'Copied';
+      setTimeout(() => { button.textContent = original; }, 1200);
+    } catch {
+      button.textContent = 'Copy failed';
+      setTimeout(() => { button.textContent = 'Copy'; }, 1200);
+    }
   }
 
   async function deriveKey(password, salt) {
@@ -82,11 +94,17 @@
         const text = $('ct').value;
         if (!text) return setOutput('Enter text first.');
         setOutput('Calculating…');
-        let html = '';
-        if ($('h1').checked) html += '<div class="crypto-result-row"><b>SHA-1</b><code>' + await digest('SHA-1', enc.encode(text)) + '</code></div>';
-        if ($('h256').checked) html += '<div class="crypto-result-row"><b>SHA-256</b><code>' + await digest('SHA-256', enc.encode(text)) + '</code></div>';
-        if ($('h512').checked) html += '<div class="crypto-result-row"><b>SHA-512</b><code>' + await digest('SHA-512', enc.encode(text)) + '</code></div>';
-        setOutput(html || 'Select at least one algorithm.');
+        const results = [];
+        if ($('h1').checked) results.push(['SHA-1', await digest('SHA-1', enc.encode(text))]);
+        if ($('h256').checked) results.push(['SHA-256', await digest('SHA-256', enc.encode(text))]);
+        if ($('h512').checked) results.push(['SHA-512', await digest('SHA-512', enc.encode(text))]);
+        if (!results.length) return setOutput('Select at least one algorithm.');
+        setOutput(results.map(([algorithm, hash]) =>
+          '<div class="crypto-result-row"><b>' + algorithm + '</b><code>' + hash + '</code><button type="button" class="crypto-secondary crypto-copy-hash">Copy</button></div>'
+        ).join(''));
+        document.querySelectorAll('.crypto-copy-hash').forEach((button, index) => {
+          button.onclick = () => copyText(results[index][1], button);
+        });
       };
       return;
     }
@@ -100,9 +118,15 @@
         if (!file) return setOutput('Select a file first.');
         setOutput('Hashing locally…');
         const data = await file.arrayBuffer();
+        const sha256 = await digest('SHA-256', data);
+        const sha512 = await digest('SHA-512', data);
         setOutput('<b>' + escapeHtml(file.name) + '</b><br>' + file.size.toLocaleString() + ' bytes' +
-          '<div class="crypto-result-row"><b>SHA-256</b><code>' + await digest('SHA-256', data) + '</code></div>' +
-          '<div class="crypto-result-row"><b>SHA-512</b><code>' + await digest('SHA-512', data) + '</code></div>');
+          '<div class="crypto-result-row"><b>SHA-256</b><code>' + sha256 + '</code><button type="button" class="crypto-secondary crypto-copy-hash">Copy</button></div>' +
+          '<div class="crypto-result-row"><b>SHA-512</b><code>' + sha512 + '</code><button type="button" class="crypto-secondary crypto-copy-hash">Copy</button></div>');
+        const hashes = [sha256, sha512];
+        document.querySelectorAll('.crypto-copy-hash').forEach((button, index) => {
+          button.onclick = () => copyText(hashes[index], button);
+        });
       };
       $('fe').onclick = async () => {
         const file = $('cf').files[0];
@@ -110,7 +134,7 @@
         setOutput('Encoding locally…');
         const encoded = bytesToBase64(await file.arrayBuffer());
         setOutput('<b>Base64 encoded file</b><textarea rows="10" readonly>' + escapeHtml(encoded) + '</textarea><button class="crypto-secondary" id="copyEncoded">Copy Base64</button>');
-        $('copyEncoded').onclick = () => navigator.clipboard && navigator.clipboard.writeText(encoded);
+        $('copyEncoded').onclick = () => copyText(encoded, $('copyEncoded'));
       };
       return;
     }
