@@ -58,10 +58,22 @@
     [...root.querySelectorAll('.finding-card')].forEach((card,index)=>{
       const finding=findings[index];if(!finding?.id)return;card.hidden=!visibleFinding(finding);
       if(!card.querySelector('.finding-status-wrap')){
-        const actions=card.querySelector('.finding-actions')||card;const wrap=document.createElement('label');wrap.className='finding-status-wrap';
+        const actions=card.querySelector('.finding-actions')||card;
+        const wrap=document.createElement('div');wrap.className='finding-controls';
+        const statusWrap=document.createElement('label');statusWrap.className='finding-status-wrap';
         const text=document.createElement('span');text.textContent='STATUS';const select=document.createElement('select');select.className='finding-status';
         allowed.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=labels[value];option.selected=(finding.status||'open')===value;select.appendChild(option)});
-        select.dataset.findingId=finding.id;select.addEventListener('change',()=>updateStatus(select));wrap.append(text,select);actions.prepend(wrap);
+        select.dataset.findingId=finding.id;select.addEventListener('change',()=>updateStatus(select));
+        statusWrap.append(text,select);
+
+        const deleteButton=document.createElement('button');
+        deleteButton.type='button';
+        deleteButton.className='finding-delete';
+        deleteButton.textContent='Delete';
+        deleteButton.dataset.findingId=finding.id;
+        deleteButton.addEventListener('click',()=>deleteFinding(deleteButton));
+        wrap.append(statusWrap,deleteButton);
+        actions.prepend(wrap);
       }
     });
     root.querySelectorAll('.finding-card p').forEach(linkify);
@@ -70,6 +82,20 @@
   async function updateStatus(select){
     const id=select.dataset.findingId,status=select.value;if(!id||!allowed.includes(status)||busy)return;busy=true;select.disabled=true;
     try{const r=await fetch(`/api/findings/${encodeURIComponent(id)}`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status})});if(!r.ok)throw new Error();await load();document.dispatchEvent(new CustomEvent('web404:findings-updated'));}catch{await load()}finally{busy=false;select.disabled=false;}
+  }
+
+  async function deleteFinding(button){
+    const id=button.dataset.findingId;if(!id||busy)return;
+    const finding=findings.find(f=>f.id===id);
+    if(!window.confirm(`Delete finding "${finding?.title||'this finding'}"? This cannot be undone.`))return;
+    busy=true;button.disabled=true;
+    try{
+      const r=await fetch(`/api/findings/${encodeURIComponent(id)}`,{method:'DELETE'});
+      if(!r.ok){let message='Could not delete finding.';try{const data=await r.json();message=data.error||message}catch{}throw new Error(message)}
+      await load();
+      document.dispatchEvent(new CustomEvent('web404:findings-updated'));
+    }catch(e){window.alert(e.message||'Could not delete finding.');await load()}
+    finally{busy=false;button.disabled=false;}
   }
 
   function riskRows(){
@@ -97,7 +123,6 @@
 
     const oldRows=panel.querySelectorAll('.risk-row');oldRows.forEach(row=>row.remove());
     const rows=riskRows();
-    const title=panel.querySelector('.risk-breakdown-title');
     rows.forEach(([source,data])=>{
       const row=document.createElement('div');row.className='risk-row';
       const label=document.createElement('span');label.textContent=source;
