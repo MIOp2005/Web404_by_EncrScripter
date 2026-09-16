@@ -53,10 +53,17 @@
     });
   }
 
-  function addEvidenceEditor(card,finding){
-    if(finding.status!=='open'||card.dataset.evidenceEditor==='1')return;
+  function setEvidenceEditable(card,finding){
     const evidence=[...card.querySelectorAll('p')].find(p=>/^Evidence/i.test(p.textContent||''));
     if(!evidence)return;
+    if(finding.status!=='open'){
+      evidence.contentEditable='false';
+      evidence.removeAttribute('title');
+      evidence.removeAttribute('aria-label');
+      evidence.classList.remove('finding-evidence-editing');
+      return;
+    }
+    if(card.dataset.evidenceEditor==='1')return;
     const original=evidence.textContent.replace(/^Evidence\s*:?\s*/i,'').trim();
     evidence.dataset.evidenceOriginal=original;
     evidence.dataset.evidenceEditor='1';
@@ -126,7 +133,7 @@
         wrap.append(statusWrap,deleteButton);
         actions.prepend(wrap);
       }
-      addEvidenceEditor(card,finding);
+      setEvidenceEditable(card,finding);
     });
     root.querySelectorAll('.finding-card p').forEach(linkify);
   }
