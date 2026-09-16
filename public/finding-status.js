@@ -54,33 +54,54 @@
   }
 
   function addEvidenceEditor(card,finding){
-    if(finding.status!=='open'||card.querySelector('.finding-evidence-editor'))return;
+    if(finding.status!=='open'||card.dataset.evidenceEditor==='1')return;
     const evidence=[...card.querySelectorAll('p')].find(p=>/^Evidence/i.test(p.textContent||''));
     if(!evidence)return;
     const original=evidence.textContent.replace(/^Evidence\s*:?\s*/i,'').trim();
-    const editor=document.createElement('div');editor.className='finding-evidence-editor';
-    const textarea=document.createElement('textarea');textarea.className='finding-evidence-input';textarea.value=original;textarea.maxLength=2000;textarea.setAttribute('aria-label','Edit finding evidence');
-    const actions=document.createElement('div');actions.className='finding-evidence-actions';
-    const save=document.createElement('button');save.type='button';save.className='finding-evidence-save';save.textContent='Save Evidence';
-    const cancel=document.createElement('button');cancel.type='button';cancel.className='finding-evidence-cancel';cancel.textContent='Cancel';
-    actions.append(save,cancel);editor.append(textarea,actions);
-    const edit=document.createElement('button');edit.type='button';edit.className='finding-evidence-edit';edit.textContent='Edit Evidence';
-    edit.addEventListener('click',()=>{edit.hidden=true;evidence.hidden=true;editor.hidden=false;textarea.focus()});
-    editor.hidden=true;
-    cancel.addEventListener('click',()=>{textarea.value=original;editor.hidden=true;edit.hidden=false;evidence.hidden=false});
-    save.addEventListener('click',async()=>{
-      const value=textarea.value.trim();
-      if(!value){window.alert('Evidence cannot be empty.');return}
-      save.disabled=true;cancel.disabled=true;save.textContent='Saving…';
+    evidence.dataset.evidenceOriginal=original;
+    evidence.dataset.evidenceEditor='1';
+    evidence.contentEditable='true';
+    evidence.spellcheck=false;
+    evidence.title='Click to edit evidence';
+    evidence.setAttribute('aria-label','Finding evidence — editable while Open');
+    evidence.addEventListener('focus',()=>{
+      evidence.dataset.evidenceOriginal=evidence.textContent.replace(/^Evidence\s*:?\s*/i,'').trim();
+      evidence.classList.add('finding-evidence-editing');
+    });
+    evidence.addEventListener('keydown',event=>{
+      if(event.key==='Escape'){
+        event.preventDefault();
+        evidence.textContent=`Evidence: ${evidence.dataset.evidenceOriginal||''}`;
+        evidence.blur();
+      }
+      if(event.key==='Enter'&&!event.shiftKey){
+        event.preventDefault();
+        evidence.blur();
+      }
+    });
+    evidence.addEventListener('blur',async()=>{
+      evidence.classList.remove('finding-evidence-editing');
+      const value=evidence.textContent.replace(/^Evidence\s*:?\s*/i,'').trim().slice(0,2000);
+      const previous=evidence.dataset.evidenceOriginal||'';
+      if(!value){
+        evidence.textContent=`Evidence: ${previous}`;
+        return;
+      }
+      if(value===previous)return;
+      evidence.setAttribute('contenteditable','false');
       try{
         const r=await fetch(`/api/findings/${encodeURIComponent(finding.id)}`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({evidence:value})});
         if(!r.ok){let message='Could not update evidence.';try{const data=await r.json();message=data.error||message}catch{}throw new Error(message)}
+        evidence.dataset.evidenceOriginal=value;
         await load();
         document.dispatchEvent(new CustomEvent('web404:findings-updated'));
-      }catch(e){window.alert(e.message||'Could not update evidence.');save.disabled=false;cancel.disabled=false;save.textContent='Save Evidence'}
+      }catch(e){
+        evidence.textContent=`Evidence: ${previous}`;
+        window.alert(e.message||'Could not update evidence.');
+      }finally{
+        evidence.setAttribute('contenteditable','true');
+      }
     });
-    evidence.parentNode.insertBefore(edit,evidence.nextSibling);
-    evidence.parentNode.insertBefore(editor,edit.nextSibling);
   }
 
   function renderControls(){
