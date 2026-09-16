@@ -4,7 +4,6 @@
   const inputIds={'IP Intelligence':'ipInput','Domain Intelligence':'domainInput','URL Intelligence':'urlIntelInput','Username OSINT':'userInput','File Metadata Analyzer':'metadataInput'};
   const sourceFor=el=>modules[el?.id]||'Web404 Module';
   const valueFor=source=>source==='File Metadata Analyzer'?$('metadataInput')?.files?.[0]?.name||'':$(inputIds[source])?.value?.trim()||'';
-  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clean=el=>{
     const clone=el.cloneNode(true);
     clone.querySelectorAll('button,a,input,select').forEach(n=>n.remove());
@@ -13,20 +12,17 @@
     clone.querySelectorAll('.stat').forEach(stat=>{
       const label=stat.querySelector('small')?.textContent?.trim();
       const value=stat.querySelector('b')?.textContent?.trim();
-      if(label&&value)rows.push({label,value});
+      if(label&&value)rows.push(`${label}: ${value}`);
     });
     clone.querySelectorAll('.ip-intel-section').forEach(section=>{
       const heading=section.querySelector('.ip-intel-section-title')?.textContent?.trim();
-      if(heading)rows.push({label:heading,value:''});
-      section.querySelectorAll('.record').forEach(record=>{
-        const text=record.textContent.replace(/\s+/g,' ').trim();
-        if(text)rows.push({label:'Details',value:text});
-      });
+      if(heading)rows.push(heading);
+      section.querySelectorAll('.record').forEach(record=>{const text=record.textContent.replace(/\s+/g,' ').trim();if(text)rows.push(text)});
     });
-    if(rows.length)return rows.map(r=>r.value?`<strong>${esc(r.label)}:</strong> ${esc(r.value)}`:`<strong>${esc(r.label)}</strong>`).join('<br>');
+    if(rows.length)return [...new Set(rows)].join('\n').slice(0,4000);
     const lines=[];const walker=document.createTreeWalker(clone,NodeFilter.SHOW_TEXT);let node;
     while(node=walker.nextNode()){const text=(node.nodeValue||'').replace(/\u00a0/g,' ').trim();if(text)lines.push(text)}
-    return [...new Set(lines)].join('<br>').slice(0,4000);
+    return [...new Set(lines)].join('\n').replace(/\n{3,}/g,'\n\n').slice(0,4000);
   };
   const severityFor=text=>/\bcritical\b|\bmalicious\b|\bdangerous\b/i.test(text)?'critical':/\bhigh\b|\bsuspicious\b|\bmalware\b|\bphishing\b|\bunsafe\b/i.test(text)?'high':/\bmedium\b|\bmoderate risk\b/i.test(text)?'medium':/\blow\b|\bwarning\b|\bmissing\b|\bprivacy\b/i.test(text)?'low':'info';
   const post=async finding=>{const existing=await fetch('/api/findings');if(existing.ok){const data=await existing.json();if((data.findings||[]).some(x=>x.title===finding.title&&x.source===finding.source))return true}const r=await fetch('/api/findings',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(finding)});return r.ok};
