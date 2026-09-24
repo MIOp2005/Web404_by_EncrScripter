@@ -1,58 +1,105 @@
 # Web404 by EncrScripter
 
-> Defensive cybersecurity intelligence toolkit — a focused workspace for authorized security research.
+> AI-integrated defensive cybersecurity intelligence toolkit for authorized security research and investigation workflows.
+
+Web404 brings common defensive security utilities into one browser-based workspace. It combines public intelligence lookups, local file analysis, cryptographic utilities, investigation findings, risk context and an AI Cyber Assistant.
 
 ## Modules
 
-- **Dashboard** — investigation overview, active/resolved findings and risk posture.
-- **IP Intelligence** — public IP inspection using a server-side provider integration.
-- **Domain & DNS** — live A, AAAA, MX, NS and TXT resolution plus certificate-transparency context.
-- **Email Breach** — server-side Have I Been Pwned (HIBP) breached-account lookup when `HIBP_API_KEY` is configured. Only breach metadata is returned; passwords and secrets are never exposed.
-- **Hash Toolkit** — MD5, SHA-1, SHA-256 and SHA-512 generation without storing plaintext input.
-- **Username OSINT** — structured public-profile search map.
-- **Header Scanner** — common HTTP security-header audit with SSRF protections.
-- **Findings** — investigation findings with status lifecycle, filtering and remediation notes.
-- **AI Cyber Assistant** — context-aware defensive security explanations using a server-side Gemini integration.
-- **Investigation Reports** — risk-scored report generation and JSON/print export.
+### 1. IP Intelligence
+- Public IPv4 and IPv6 inspection
+- Country, region and city context
+- ISP, organization and ASN information
+- Timezone and reverse-DNS context
+- Private and reserved address protection
 
-## Email Breach integration
+### 2. Domain & DNS
+- A, AAAA, MX, NS and TXT records
+- DNSSEC signal
+- Certificate Transparency context
+- Public certificate names and discovered subdomains
 
-Web404's Email Breach module follows the HIBP v3 API model: the API key remains server-side, requests use a descriptive User-Agent, a missing account is treated as a clean lookup, and provider errors/rate limits are surfaced safely. The project does **not** copy or execute the PowerShell module from `originaluko/haveibeenpwned`; it uses the public API directly from the Web404 backend.
+### 3. URL Intelligence
+- URL structure inspection
+- Hostname, protocol, port and path analysis
+- Query-parameter inspection
+- Sensitive-looking parameter detection
+- Public DNS and HTTP security-header signals
 
-### Configure HIBP
+### 4. Hash & Cryptography
+- MD5, SHA-1, SHA-256 and SHA-512 hashing
+- Encoding and decoding utilities
+- File encode/decode utilities
+- Password-protection utilities
+- Hash/encoding identification
+- Client-side cryptographic operations where supported
 
-Create a server-side `.env` file from `.env.example` and set:
+### 5. Username OSINT
+- Username normalization and analysis
+- Public-platform search map
+- Username variations
+- Public web-search links
+- GitHub profile checks
+- Manual verification workflow
 
-```env
-HIBP_API_KEY=your_key_here
-```
+The module is designed for public, authorized research and does not claim a username exists on a service unless the result can be verified.
 
-Never commit `.env` or paste API keys into source code, frontend JavaScript, GitHub issues, or chat.
+### 6. File Metadata Analyzer
+- Local file property inspection
+- MIME type and extension
+- File size and modification time
+- SHA-256 calculation
+- Image dimensions
+- Supported embedded JPEG EXIF fields
+- Local browser-side analysis
 
-## AI Cyber Assistant
+Selected files are not uploaded by the metadata module.
 
-The AI assistant runs through the Web404 backend so the Gemini API key is never exposed to the browser.
+### 7. Investigation Findings
+- Create findings from investigation modules
+- Severity and confidence
+- Evidence and remediation
+- Open, In Progress and Resolved status lifecycle
+- Evidence editing while a finding is Open
+- Individual finding deletion
+- Session-based findings storage
 
-1. Copy `.env.example` to `.env`.
-2. Add your Google Gemini API key:
+Findings are held in server memory and are not intended as permanent storage.
+
+### 8. AI Cyber Assistant
+- Gemini-powered defensive analysis
+- Uses current Web404 investigation context
+- Can analyze findings and module results
+- Supports conversational follow-up
+- API key remains server-side
+- Defensive-use system instructions and input limits
+- Does not intentionally invent investigation results when the required evidence is unavailable
+
+## Architecture
+
+Web404 uses a small Node.js/Express backend with a browser-based frontend.
+
+- **Frontend:** HTML, CSS and JavaScript
+- **Backend:** Node.js + Express
+- **DNS:** Node DNS APIs
+- **IP intelligence:** Public IP intelligence provider
+- **Certificate intelligence:** Certificate Transparency data
+- **Metadata:** Local browser processing
+- **AI:** Google Gemini Interactions API
+- **Findings:** In-memory server session storage
+
+## AI configuration
+
+The AI assistant requires a Gemini API key on the server.
+
+Create a `.env` file and configure:
 
 ```env
 GEMINI_API_KEY=your_gemini_key_here
 GEMINI_MODEL=gemini-3.8-flash
 ```
 
-3. Install dependencies and start Web404:
-
-```bash
-npm install
-npm start
-```
-
-4. Open `http://localhost:3000`, go to **AI Assistant**, and send a message.
-
-The server exposes `/api/health`, which reports whether the Gemini integration is configured. If the UI shows AI as offline, check that `GEMINI_API_KEY` is present in the server environment and restart the server.
-
-The Gemini integration uses Google's Interactions API with server-side requests and the `gemini-3.8-flash` model by default.
+The API key is used by the backend and is not placed in frontend JavaScript.
 
 ## Run locally
 
@@ -63,25 +110,36 @@ npm install
 npm start
 ```
 
-Open `http://localhost:3000`.
+Then open `http://localhost:3000`.
+
+For development with Node's watch mode:
+
+```bash
+npm run dev
+```
 
 ## Security model
 
-Web404 is designed for systems, domains and accounts you own or have explicit permission to assess. Provider API keys stay server-side. Lookup results are not intentionally persisted by the application. The Email Breach module returns breach metadata only and never returns passwords, authentication secrets, or private personal-data records.
+Web404 is intended for systems, domains, files and accounts that you own or are explicitly authorized to investigate.
+
+The project is designed around defensive analysis. It does not intentionally provide functionality for credential theft, malware deployment, persistence, evasion, destructive actions, unauthorized access or private personal-data exposure.
+
+Provider/API credentials should remain server-side and should never be committed to the repository.
 
 ## Configuration
 
-Optional integrations:
+Current server configuration:
 
-- `HIBP_API_KEY` — enables Email Breach lookups.
 - `GEMINI_API_KEY` — enables the AI Cyber Assistant.
 - `GEMINI_MODEL` — Gemini model name; defaults to `gemini-3.8-flash`.
 - `PORT` — HTTP port; defaults to `3000`.
 
-## CI
+There is **no HIBP/Email Breach integration** in the current version.
 
-The repository includes a GitHub Actions security smoke-test workflow. The project currently has no lockfile, so CI intentionally uses `npm install` rather than `npm ci`.
+## Project status
+
+Web404 is an actively developed project by **EncrScripter**. Features may evolve as modules are improved and tested.
 
 ## License
 
-Web404 by EncrScripter is distributed under the project's existing license. Third-party projects referenced for integration patterns retain their own licenses.
+Web404 by EncrScripter is distributed under the project's existing license.
